@@ -1,0 +1,17 @@
+[project]
+name = "medical-agent-mcp"
+version = "1.0.0"
+description = "Medical agent MCP server for PubMed search, drug information lookup, and medical Q&A"
+readme = "README.md"
+requires-python = ">=3.10, <3.13"
+dependencies = [ "mcp>=1.9.0",]
+[[project.authors]]
+name = "Muhammad Ahmed"
+email = "140757400+Ahmedwyne@users.noreply.github.com"
+
+[build-system]
+requires = [ "hatchling",]
+build-backend = "hatchling.build"
+
+[project.scripts]
+medical-agent-mcp = "medical_agent_mcp:main"

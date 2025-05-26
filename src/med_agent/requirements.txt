@@ -1,0 +1,16 @@
+# chromadb>=0.5.18
+# embedchain>=0.1.114
+# crewai==0.86.0
+# crewai-tools==0.25.8
+# transformers==4.51.3
+# tokenizers>=0.21,<0.22
+# faiss-cpu
+
+embedchain
+crewai
+crewai-tools
+transformers
+tokenizers
+faiss-cpu
+sentence-transformers
+groq

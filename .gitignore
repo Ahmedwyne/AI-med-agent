@@ -1,0 +1,21 @@
+.env
+__pycache__/
+.DS_Store
+
+# Python/ML/VSCode/OS-specific ignores
+
+*.pkl
+*.bin
+*.swp
+.vscode/
+.pytest_cache/
+knowledge/user_preference.txt
+med_agent/vector_store/
+.venv/
+src/med_agent/__pycache__/
+src/med_agent/vector_store/
+src/med_agent/tools/__pycache__/
+/pyporject.toml
+/src/med_agent/MCP_Server/.gitignore
+/src/med_agent/MCP_Server/.python-version
+/uv.lock

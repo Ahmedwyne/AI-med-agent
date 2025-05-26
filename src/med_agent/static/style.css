@@ -1,0 +1,70 @@
+body {
+  font-family: 'Segoe UI', Arial, sans-serif;
+  background: #f6f8fa;
+  margin: 0;
+  padding: 0;
+}
+.container {
+  max-width: 700px;
+  margin: 40px auto;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+  padding: 32px 24px 24px 24px;
+}
+h1 {
+  text-align: center;
+  color: #2d3a4a;
+  margin-bottom: 32px;
+}
+#query-form {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+#user-query {
+  flex: 1;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 1.1em;
+}
+button {
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 24px;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button:hover {
+  background: #1e40af;
+}
+#conversation {
+  margin-top: 24px;
+}
+.user-msg, .agent-msg {
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 1.08em;
+  line-height: 1.6;
+}
+.user-msg {
+  background: #e0e7ef;
+  text-align: right;
+}
+.agent-msg {
+  background: #f1f5f9;
+  border-left: 4px solid #2563eb;
+}
+.error {
+  color: #b91c1c;
+  background: #fee2e2;
+  border-left: 4px solid #b91c1c;
+  padding: 12px;
+  border-radius: 6px;
+  margin-bottom: 18px;
+}

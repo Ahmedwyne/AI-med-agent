@@ -1,0 +1,32 @@
+tasks:
+  - agent_id: pubmed_search
+    description: Search PubMed for PMIDs matching the user's question.
+    expected_output: A comma-separated string of PubMed IDs.
+
+  - agent_id: fetch_abstracts
+    description: Fetch abstracts for the given PMIDs from PubMed.
+    expected_output: Raw abstract text concatenated by double newlines.
+
+  - agent_id: drug_info
+    description: Retrieve key drug data if the user's query pertains to a medication.
+    expected_output: A human‑readable summary of drug properties.
+
+  - agent_id: embed_and_index
+    description: Embed the retrieved abstracts (and optionally drug info) and index them in ChromaDB.
+    expected_output: Status and number of chunks indexed.
+
+  - agent_id: retrieve_chunks
+    description: Retrieve up to the top 3 semantically relevant text chunks for the query.
+    expected_output: A list of text chunks.
+
+  - agent_id: generate_summary
+    description: Generate the final medical answer using Groq's LLaMA model.
+    expected_output: A concise, safe answer to the user's medical question.
+
+graph:
+  - [search_pubmed, fetch_abstracts]
+  - [fetch_abstracts, embed_and_index]
+  - [embed_and_index, retrieve_chunks]
+  - [search_pubmed, fetch_drug_info]    # parallel drug path
+  - [retrieve_chunks, generate_summary]
+  - [fetch_drug_info, generate_summary]
