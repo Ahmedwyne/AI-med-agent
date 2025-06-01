@@ -58,12 +58,36 @@ class DrugInfoTool(MedicalTool):
             else:
                 print("No related terms for ingredient-level RxCUI (TTY=IN).")
 
+            # Reasoning and clinical relevance
+            reasoning = []
+            if tty == "IN":
+                reasoning.append(f"{name} is an ingredient-level entry in RxNorm, representing the active substance.")
+            elif tty:
+                reasoning.append(f"{name} is classified as '{tty}' in RxNorm, which may indicate a brand, pack, or synonym.")
+            if brands:
+                reasoning.append(f"Common brand names include: {', '.join(brands)}.")
+            if synonyms:
+                reasoning.append(f"Synonyms or alternative names: {', '.join(synonyms[:5]) + ('...' if len(synonyms) > 5 else '')}.")
+            if not brands and not synonyms:
+                reasoning.append("No brand or synonym information was found for this entry.")
+            reasoning.append("Always verify drug information with a healthcare provider or pharmacist, especially for dosing, interactions, and contraindications.")
+
+            # Plain-language summary
+            plain_summary = f"{name} (RxCUI: {rxcui}) is a {tty or 'drug'} used in clinical practice. "
+            if brands:
+                plain_summary += f"It is available under brand names such as {', '.join(brands[:3]) + ('...' if len(brands) > 3 else '')}. "
+            if synonyms:
+                plain_summary += f"It may also be known as {', '.join(synonyms[:3]) + ('...' if len(synonyms) > 3 else '')}. "
+            plain_summary += "Consult a healthcare professional for detailed usage, safety, and interaction information."
+
             summary = (
-                f"Drug: {name}\n"
-                f"Term type: {tty or 'N/A'}\n"
+                f"Drug Name: {name}\n"
+                f"Term Type: {tty or 'N/A'}\n"
                 f"RxCUI: {rxcui}\n"
-                f"Synonyms: {', '.join(synonyms) if synonyms else 'N/A (not available for this TTY)'}\n"
-                f"Brand Names: {', '.join(brands) if brands else 'N/A (not available for this TTY)'}"
+                f"Synonyms: {', '.join(synonyms) if synonyms else 'N/A'}\n"
+                f"Brand Names: {', '.join(brands) if brands else 'N/A'}\n"
+                f"\nClinical Reasoning & Relevance:\n- " + "\n- ".join(reasoning) +
+                f"\n\nPlain-language summary:\n{plain_summary}"
             )
             return {"drug_info": summary}
 

@@ -1,6 +1,5 @@
 import os
 import time
-from typing import Any, Dict, List, Optional
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
 from crewai.llm import LLM
@@ -12,6 +11,8 @@ load_dotenv()
 # Import your tool implementations
 from med_agent.tools.pubmed import PubMedSearchTool, PubMedFetchTool
 from med_agent.tools.drugs import DrugInfoTool
+from med_agent.tools.clinicaltrials import ClinicalTrialsGovTool
+from med_agent.tools.cdc import CDCGuidelinesTool
 from med_agent.agents.embedding_tasks import (
     EmbedAndIndexTool,
     RetrieveChunksTool,
@@ -21,10 +22,11 @@ from med_agent.agents.embedding_tasks import (
 # Configure retry parameters
 MAX_RETRIES = 5  # Increased retries
 BASE_DELAY = 10.0  # Increased base delay
-TOKEN_LIMIT = 800  # Lower token limit to stay under TPM
+TOKEN_LIMIT = 900  # Lower token limit to stay under TPM
 
 def create_llm_with_retries():
-    """Create LLM instance with retry logic for rate limits."""
+    """Create LLM instance with retry logic for rate limits and force max_tokens limit."""
+    import re
     class RetryLLM(LLM):
         def __init__(self):
             super().__init__(
@@ -34,21 +36,40 @@ def create_llm_with_retries():
                 temperature=0.7,
                 max_tokens=TOKEN_LIMIT
             )
-        
         def chat_completion(self, messages, *args, **kwargs):
+            # Always enforce max_tokens limit
+            kwargs["max_tokens"] = TOKEN_LIMIT
+            # Optionally truncate messages if too long (simple check)
+            total_content = " ".join(m.get("content", "") for m in messages)
+            if len(total_content) > 6000:  # crude char-based limit
+                print("[WARN] Prompt too long, truncating context for rate limit safety.")
+                for m in messages:
+                    if "content" in m:
+                        m["content"] = m["content"][-4000:]  # keep last 4000 chars
             for attempt in range(MAX_RETRIES):
                 try:
-                    # Always add a small delay before each attempt
                     initial_delay = 5.0 if attempt == 0 else BASE_DELAY * (4 ** attempt)
                     print(f"\nWaiting {initial_delay}s before request (attempt {attempt + 1}/{MAX_RETRIES})")
                     time.sleep(initial_delay)
-                    
-                    return super().chat_completion(messages, *args, **kwargs)
+                    response = super().chat_completion(messages, *args, **kwargs)
+                    # Defensive: check for None or empty response
+                    if not response or (isinstance(response, str) and not response.strip()):
+                        print("[ERROR] LLM returned None or empty response. Returning fallback message.")
+                        return "[LLM ERROR] No response generated. Please try again or check model/provider settings."
+                    return response
                 except RateLimitError as e:
-                    if attempt < MAX_RETRIES - 1:
-                        delay = BASE_DELAY * (4 ** attempt)  # More aggressive backoff
+                    error_msg = str(e)
+                    wait_time = None
+                    match = re.search(r"try again in ([0-9.]+)s", error_msg)
+                    if match:
+                        wait_time = float(match.group(1))
+                        print(f"\nGroq rate limit: waiting {wait_time}s as suggested by API.")
+                        time.sleep(wait_time)
+                    else:
+                        delay = BASE_DELAY * (4 ** attempt)
                         print(f"\nRate limit reached. Waiting {delay}s before retry")
                         time.sleep(delay)
+                    if attempt < MAX_RETRIES - 1:
                         continue
                     raise
                 except Exception as e:
@@ -58,7 +79,6 @@ def create_llm_with_retries():
                         time.sleep(delay)
                         continue
                     raise
-    
     return RetryLLM()
 
 # Set up Groq LLM with retry logic
@@ -69,6 +89,8 @@ groq_llm = create_llm_with_retries()
 pubmed_search = PubMedSearchTool()
 pubmed_fetch = PubMedFetchTool()
 drug_info = DrugInfoTool()
+clinical_trials = ClinicalTrialsGovTool()
+cdc_guidelines = CDCGuidelinesTool()
 embed_index = EmbedAndIndexTool()
 retrieve_chunks = RetrieveChunksTool()
 generate_summary = GenerateSummaryTool()
@@ -80,7 +102,7 @@ research_agent = Agent(
     backstory="""I am an expert at searching and analyzing medical research papers. 
     I store my findings in MCP notes for other agents to use, and always include 
     PubMed IDs (PMIDs) as references.""",
-    tools=[pubmed_search, pubmed_fetch],
+    tools=[pubmed_search, pubmed_fetch, clinical_trials, cdc_guidelines],
     llm=groq_llm,
     allow_delegation=True,  # Enable MCP delegation
     verbose=True
@@ -102,7 +124,7 @@ synthesis_agent = Agent(
     goal="Process and synthesize medical information",
     backstory="""I excel at understanding and summarizing complex medical information.
     I combine literature findings and drug analysis from MCP notes to create comprehensive summaries.""",
-    tools=[embed_index, retrieve_chunks, generate_summary],
+    tools=[embed_index, retrieve_chunks, generate_summary, clinical_trials, cdc_guidelines],
     llm=groq_llm,
     allow_delegation=True,  # Enable MCP delegation
     verbose=True
@@ -119,7 +141,8 @@ crew = Crew(
             Must include publication dates and impact factors when available.""",
             agent=research_agent,
             expected_output="A curated list of relevant PubMed articles with brief summaries and publication details",
-            context_format="Medical query: {query}\nRequired information: Recent studies, clinical evidence, safety data"
+            context_format="Medical query: {query}\nRequired information: Recent studies, clinical evidence, safety data",
+            input_keys=["query"],  # Ensure the user's query is passed to the agent/tool
         ),
         Task(
             description="""Analyze drug interactions, mechanisms, and safety profiles.

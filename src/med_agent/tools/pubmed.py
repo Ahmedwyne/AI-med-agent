@@ -29,57 +29,9 @@ class PubMedSearchTool(MedicalTool):
     description: str = "Search PubMed for comprehensive medical information and research articles."
 
     def build_query(self, query: str) -> str:
-        """Build an optimized PubMed search query using MeSH terms and field-specific searching.
-        
-        Args:
-            query (str): The medical query to search for
-            
-        Returns:
-            str: An optimized PubMed search query using MeSH terms where applicable
-        """
+        """Build a PubMed search query using only [All Fields] for each term (no MeSH mapping)."""
         terms = query.lower().split()
-        field_queries = []
-          # Map common terms to MeSH terms for comprehensive medical search
-        mesh_mapping = {
-            # Drug-related terms
-            "side": "adverse effects[MeSH Subheading]",
-            "effects": "adverse effects[MeSH Subheading]",
-            "adverse": "adverse effects[MeSH Subheading]",
-            "safety": "drug safety[MeSH Terms]",
-            "dosage": "administration and dosage[MeSH Subheading]",
-            "risk": "risk[MeSH Terms]",
-            
-            # Common medications
-            "ibuprofen": "ibuprofen[MeSH Terms]",
-            "aspirin": "aspirin[MeSH Terms]",
-            "paracetamol": "acetaminophen[MeSH Terms]",
-            
-            # Medical conditions and symptoms
-            "pain": "pain[MeSH Terms]",
-            "fever": "fever[MeSH Terms]",
-            "inflammation": "inflammation[MeSH Terms]",
-            "symptoms": "signs and symptoms[MeSH Terms]",
-            
-            # Treatment-related terms
-            "treatment": "therapeutics[MeSH Terms]",
-            "therapy": "therapy[MeSH Subheading]",
-            "prevention": "prevention and control[MeSH Subheading]",
-            
-            # Study types
-            "common": "epidemiology[MeSH Subheading]",
-            "trial": "clinical trial[Publication Type]",
-            "review": "review[Publication Type]",
-            "meta": "meta-analysis[Publication Type]"
-        }
-        
-        # Build field-specific queries
-        for term in terms:
-            if term in mesh_mapping:
-                field_queries.append(mesh_mapping[term])
-            else:
-                field_queries.append(f"{term}[All Fields]")
-        
-        # Combine with AND
+        field_queries = [f"{term}[All Fields]" for term in terms]
         return " AND ".join(field_queries)
 
     def handle_rate_limit(self, delay: float = 6.0):
@@ -87,18 +39,13 @@ class PubMedSearchTool(MedicalTool):
         import time
         time.sleep(delay)  # Wait for the specified delay
 
-    def _run(self, **kwargs) -> Dict[str, Any]:
-        """
-        Search PubMed for articles matching the query.
-        
-        Args:
-            query (str): The search query for PubMed
-            
-        Returns:
-            dict: Dictionary containing PMIDs or error message
-        """
-        query = kwargs.get("query", "")
-        if not query or not isinstance(query, str):
+    def _run(self, query: str = "", **kwargs) -> Dict[str, Any]:
+        """Search PubMed for articles matching the query string."""
+        if not query:
+            # Defensive: try to get from kwargs if not passed directly
+            query = kwargs.get("query", "")
+        if not query:
+            print("[DEBUG] PubMedSearchTool._run: No valid query provided.")
             return {"pmids": ""}
 
         max_retries = 3
@@ -178,24 +125,13 @@ class PubMedFetchTool(MedicalTool):
     name: str = "PubMed Medical Information Retrieval"
     description: str = "Fetch and analyze medical information from PubMed articles."
 
-    def _run(self, pmids: str) -> Dict[str, Any]:
-        """
-        Fetch and process medical information from PubMed abstracts.
-        
-        This method retrieves abstracts and extracts key medical information including:
-        - Clinical findings and outcomes
-        - Treatment effectiveness
-        - Safety data and adverse effects
-        - Patient populations studied
-        - Level of evidence
-        
-        Args:
-            pmids (str): Comma-separated list of PubMed IDs
-            
-        Returns:
-            dict: Dictionary containing structured medical information from the abstracts
-        """
+    def _run(self, pmids: str = "", **kwargs) -> Dict[str, Any]:
+        """Fetch and process medical information from PubMed abstracts for given PMIDs."""
+        if not pmids:
+            # Defensive: try to get from kwargs if not passed directly
+            pmids = kwargs.get("pmids", "")
         if not pmids.strip():
+            print("[DEBUG] PubMedFetchTool._run: No PMIDs provided.")
             return {"abstracts": ""}
 
         try:
@@ -308,27 +244,17 @@ class PubMedFetchTool(MedicalTool):
         return result
 
     def _format_for_display(self, article: Dict[str, Any]) -> str:
-        """Format an article dictionary into a readable string.
-        
-        Args:
-            article: Dictionary containing article information
-            
-        Returns:
-            str: Formatted article text
-        """
+        """Format an article dictionary into a readable, evidence-based summary string."""
         sections = []
-        
         # Basic information
         sections.append(f"PMID: {article['pmid']}")
         sections.append(f"Title: {article['title']}")
         sections.append(f"Journal: {article['journal']}")
-        
         # Authors
         if article['authors']:
             sections.append(f"Authors: {'; '.join(article['authors'][:3])}")
             if len(article['authors']) > 3:
                 sections.append(f"    and {len(article['authors']) - 3} more")
-        
         # Date
         date_parts = []
         for part in ['year', 'month', 'day']:
@@ -336,24 +262,42 @@ class PubMedFetchTool(MedicalTool):
                 date_parts.append(article['date'][part])
         if date_parts:
             sections.append(f"Date: {' '.join(date_parts)}")
-        
         # DOI
         if article['doi']:
             sections.append(f"DOI: {article['doi']}")
-        
         # Publication Types
         if article['publication_types']:
             sections.append(f"Publication Type: {', '.join(article['publication_types'])}")
-        
         # MeSH Terms
         if article['mesh_terms']:
             sections.append("MeSH Terms:")
             sections.append("    " + "; ".join(article['mesh_terms']))
-        
-        # Abstract
+        # Abstract (with improved formatting)
         sections.append("\nAbstract:")
         for label, text in article['abstract_sections'].items():
-            sections.append(f"\n{label.title()}:")
+            if label != "text":
+                sections.append(f"\n{label.title()}:")
             sections.append(text)
-        
+        # Clinical summary and plain-language summary
+        clinical_summary = []
+        if 'conclusion' in article['abstract_sections']:
+            clinical_summary.append(f"Key Conclusion: {article['abstract_sections']['conclusion']}")
+        elif 'results' in article['abstract_sections']:
+            clinical_summary.append(f"Key Results: {article['abstract_sections']['results']}")
+        elif 'text' in article['abstract_sections']:
+            clinical_summary.append(f"Summary: {article['abstract_sections']['text'][:300]}{'...' if len(article['abstract_sections']['text']) > 300 else ''}")
+        if clinical_summary:
+            sections.append("\nClinical Summary:")
+            for line in clinical_summary:
+                sections.append(f"- {line}")
+        # Plain-language summary
+        plain = f"This article (PMID: {article['pmid']}) discusses {article['title']}. "
+        if 'conclusion' in article['abstract_sections']:
+            plain += f"Main conclusion: {article['abstract_sections']['conclusion'][:200]}{'...' if len(article['abstract_sections']['conclusion']) > 200 else ''} "
+        elif 'results' in article['abstract_sections']:
+            plain += f"Key results: {article['abstract_sections']['results'][:200]}{'...' if len(article['abstract_sections']['results']) > 200 else ''} "
+        elif 'text' in article['abstract_sections']:
+            plain += f"Summary: {article['abstract_sections']['text'][:200]}{'...' if len(article['abstract_sections']['text']) > 200 else ''} "
+        plain += "Consult a healthcare professional for interpretation and application to your care."
+        sections.append(f"\nPlain-language summary:\n{plain}")
         return "\n".join(sections)
