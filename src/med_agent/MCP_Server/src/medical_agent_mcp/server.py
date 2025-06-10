@@ -249,11 +249,13 @@ async def handle_call_tool(
         return [
             types.TextContent(
                 type="text",
-                text=f"Drug Information for {drug_info['name']}:\n\n"
-                     f"Description: {drug_info['description']}\n"
-                     f"Indications: {drug_info['indications']}\n"
-                     f"Contraindications: {drug_info['contraindications']}\n"
-                     f"Side Effects: {drug_info['side_effects']}"
+                text=(
+                    f"## Drug Information: {drug_info['name']}\n\n"
+                    f"**Description:** {drug_info['description']}\n\n"
+                    f"**Indications:** {drug_info['indications']}\n\n"
+                    f"**Contraindications:** {drug_info['contraindications']}\n\n"
+                    f"**Side Effects:** {drug_info['side_effects']}\n"
+                )
             )
         ]
     
