@@ -1,9 +1,6 @@
-# med_assistant/tools/drugs.py
-
-# Drug information tool implementation
 import requests
 from typing import Dict, Any
-from med_agent.config.settings import PUBMED_RETMAX  # just for consistency
+from med_agent.config.settings import PUBMED_RETMAX 
 from med_agent.tools.base import MedicalTool
 
 class DrugInfoTool(MedicalTool):
