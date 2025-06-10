@@ -30,75 +30,62 @@ class SynthesisTool(MedicalTool):
             return answer
 
         answer = f"**Question:** {query}\n\n"
-        # ATS/ERS/JRS/ALAT Guidelines section for IPF (replace CDC for IPF queries)
-        if 'idiopathic pulmonary fibrosis' in query.lower() or 'ipf' in query.lower():
-            answer += "### ATS/ERS/JRS/ALAT Guidelines (2022)\n"
-            answer += "- Recommend antifibrotic therapy with pirfenidone or nintedanib for most adults with IPF.\n"
-            answer += "- Supportive care: pulmonary rehabilitation, supplemental oxygen as needed, and referral for lung transplant evaluation in advanced cases.\n"
-            answer += "- Routine use of immunosuppressive therapy is not recommended.\n"
-            answer += "[ATS/ERS/JRS/ALAT 2022 Guideline Summary](https://www.thelancet.com/journals/lanres/article/PIIS2213-2600%2822%2900223-5/fulltext)\n\n"
-        else:
-            # CDC Guidelines section (for other diseases)
-            if other_sources:
-                cdc = [src for src in other_sources if src.get('source') == 'CDC']
-                if cdc:
-                    answer += "### CDC Guidelines (Guideline)\n"
-                    for guideline in cdc:
-                        summary = guideline.get('summary', 'No summary')
-                        link = guideline.get('link')
-                        if summary:
-                            # Try to extract bullet points if present in summary
-                            if '\\n*' in summary or '\n*' in summary:
-                                answer += summary + "\n"
-                            else:
-                                answer += f"- {summary}\n"
-                        if link:
-                            answer += f"[CDC Guidance Link]({link})\n"
-                    answer += "\n"
-        # Key Research Findings section
+        # Always format the answer in structured Markdown for better UI/UX
+        answer_sections = []
+        # Question section
+        answer_sections.append(f"## Question\n{query}\n")
+        # CDC Guidelines
+        if other_sources:
+            cdc = [src for src in other_sources if src.get('source') == 'CDC']
+            if cdc:
+                cdc_section = ["### CDC Guidelines"]
+                for guideline in cdc:
+                    summary = guideline.get('summary', 'No summary')
+                    link = guideline.get('link')
+                    if summary:
+                        cdc_section.append(f"- {summary}")
+                    if link:
+                        cdc_section.append(f"[CDC Guidance Link]({link})")
+                answer_sections.append("\n".join(cdc_section))
+        # Key Research Findings
         if articles:
-            answer += "### Key Research Findings\n"
+            findings = ["### Key Research Findings"]
             for idx, art in enumerate(articles, 1):
                 title = art.get('title', 'No title')
                 summary = art.get('clinical_summary', art.get('summary', 'No summary'))
                 pmid = art.get('pmid')
                 level = art.get('evidence_level', '')
-                answer += f"{idx}. **{title}**"
+                finding = f"{idx}. **{title}**"
                 if level:
-                    answer += f" ({level})"
-                answer += ": "
-                answer += summary
+                    finding += f" ({level})"
+                finding += f": {summary}"
                 if pmid:
-                    answer += f"  [PMID: {pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)"
-                answer += "\n"
-            answer += "\n"
-        # Clinical Trials section (with corrected NCTs for IPF)
-        if 'idiopathic pulmonary fibrosis' in query.lower() or 'ipf' in query.lower():
-            answer += "### Relevant Clinical Trials (ClinicalTrials.gov)\n"
-            answer += "- **TD139 (Galectin-3 inhibitor):** Phase 1/2a trial [NCT02257177](https://clinicaltrials.gov/ct2/show/NCT02257177) showed target engagement and biomarker reduction.\n"
-            answer += "- **Mesenchymal Stem Cells:** Phase 1 safety/tolerability studies [NCT02013700](https://clinicaltrials.gov/ct2/show/NCT02013700), [NCT02013674](https://clinicaltrials.gov/ct2/show/NCT02013674) show no serious infusion reactions and possible stabilization of lung function.\n"
-            answer += "- **BI 1015550 (PDE4B inhibitor):** Ongoing Phase 3 trial [NCT04693166](https://clinicaltrials.gov/ct2/show/NCT04693166).\n"
-            answer += "[Search for current IPF trials](https://clinicaltrials.gov/ct2/results?cond=Idiopathic+Pulmonary+Fibrosis)\n"
-        else:
-            if other_sources:
-                ctgov = [src for src in other_sources if src.get('source') == 'ClinicalTrials.gov']
-                if ctgov:
-                    answer += "### Relevant Clinical Trials (ClinicalTrials.gov)\n"
-                    for trial in ctgov:
-                        nct = trial.get('nct')
-                        title = trial.get('title', 'No title')
-                        status = trial.get('status', 'Unknown status')
-                        summary = trial.get('summary', 'No summary')
-                        if nct:
-                            answer += f"- **{title}** (Status: {status}) [NCT:{nct}](https://clinicaltrials.gov/ct2/show/{nct})\n  {summary}\n"
-                        else:
-                            answer += f"- **{title}** (Status: {status})\n  {summary}\n"
+                    finding += f"  [PMID: {pmid}](https://pubmed.ncbi.nlm.nih.gov/{pmid}/)"
+                findings.append(finding)
+            answer_sections.append("\n".join(findings))
+        # Clinical Trials
+        if other_sources:
+            ctgov = [src for src in other_sources if src.get('source') == 'ClinicalTrials.gov']
+            if ctgov:
+                trials = ["### Relevant Clinical Trials (ClinicalTrials.gov)"]
+                for trial in ctgov:
+                    nct = trial.get('nct')
+                    title = trial.get('title', 'No title')
+                    status = trial.get('status', 'Unknown status')
+                    summary = trial.get('summary', 'No summary')
+                    if nct:
+                        trials.append(f"- **{title}** (Status: {status}) [NCT:{nct}](https://clinicaltrials.gov/ct2/show/{nct})\n  {summary}")
+                    else:
+                        trials.append(f"- **{title}** (Status: {status})\n  {summary}")
+                answer_sections.append("\n".join(trials))
         # Other reputable sources
         if other_sources:
             other = [src for src in other_sources if src.get('source') not in ['ClinicalTrials.gov', 'CDC']]
             if other:
-                answer += "### Other Reputable Sources\n"
+                other_section = ["### Other Reputable Sources"]
                 for src in other:
-                    answer += f"- {src.get('summary', 'No summary')} ({src.get('source', 'Unknown')})\n"
-        answer += "\n**Note:** This answer is synthesized from the latest available evidence. Always consult a healthcare professional for medical advice."
-        return answer
+                    other_section.append(f"- {src.get('summary', 'No summary')} ({src.get('source', 'Unknown')})")
+                answer_sections.append("\n".join(other_section))
+        # Add a note
+        answer_sections.append("\n**Note:** This answer is synthesized from the latest available evidence. Always consult a healthcare professional for medical advice.")
+        return "\n\n".join(answer_sections)

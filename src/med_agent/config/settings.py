@@ -12,7 +12,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
 GROQ_MAX_RETRIES = int(os.getenv("GROQ_MAX_RETRIES", 5))  
 GROQ_RETRY_DELAY = float(os.getenv("GROQ_RETRY_DELAY", 10.0))  
-GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", 1024))  # reduced from 2048 to stay within stricter limits
+GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS"))  # reduced from 2048 to stay within stricter limits
 GROQ_RATE_LIMIT_TPM = int(os.getenv("GROQ_RATE_LIMIT_TPM", 12000))  # tokens per minute limit
 
 # Embedding model for SentenceTransformer

@@ -2,6 +2,7 @@ from med_agent.tools.base import MedicalTool
 from typing import List, Dict
 import requests
 import logging
+import urllib.parse
 
 class ClinicalTrialsGovTool(MedicalTool):
     """
@@ -20,6 +21,7 @@ class ClinicalTrialsGovTool(MedicalTool):
         """
         logging.debug(f"Searching ClinicalTrials.gov for: {query}")
         base_url = "https://clinicaltrials.gov/api/query/study_fields"
+        encoded_query = urllib.parse.quote(query)
         params = {
             "expr": query,
             "fields": "NCTId,BriefTitle,OverallStatus,BriefSummary",
@@ -59,7 +61,31 @@ class ClinicalTrialsGovTool(MedicalTool):
                     "location_country": location_country,
                     "source": "ClinicalTrials.gov"
                 })
+            if not results:
+                logging.info(f"No clinical trials found for query: {query}")
+                return [{
+                    "title": "No clinical trials found for this query.",
+                    "status": "N/A",
+                    "summary": "No results were returned from ClinicalTrials.gov. Please try a different or broader query.",
+                    "nct": "N/A",
+                    "source": "ClinicalTrials.gov"
+                }]
             return results
+        except requests.HTTPError as e:
+            logging.error(f"ClinicalTrials.gov fetch error: {e} | URL: {resp.url}")
+            return [{
+                "title": "ClinicalTrials.gov API error.",
+                "status": "N/A",
+                "summary": f"Error: {e}. Please check the query or try again later.",
+                "nct": "N/A",
+                "source": "ClinicalTrials.gov"
+            }]
         except Exception as e:
             logging.error(f"ClinicalTrials.gov fetch error: {e}")
-            return []
+            return [{
+                "title": "ClinicalTrials.gov API error.",
+                "status": "N/A",
+                "summary": f"Error: {e}. Please check the query or try again later.",
+                "nct": "N/A",
+                "source": "ClinicalTrials.gov"
+            }]

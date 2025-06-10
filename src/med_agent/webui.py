@@ -1,5 +1,4 @@
 import os
-import re
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -49,14 +48,22 @@ def ask_query(request: Request, data: QueryRequest):
             result_text = result['result']
         else:
             result_text = result
-        # Format result for better display: preserve line breaks and highlight PMIDs
-        
-        
-        def highlight_pmids(text):
-            # Make PMIDs bold and clickable to PubMed
-            return re.sub(r'(PMID: ?(\d+))', r'<b><a href="https://pubmed.ncbi.nlm.nih.gov/\2/" target="_blank">\1</a></b>', text)
-        formatted_result = highlight_pmids(result_text).replace('\n', '<br>')
-        return JSONResponse({"result": formatted_result, "query_type": query_type})
+        # Do not replace newlines with <br> or do any HTML conversion here.
+        # The frontend will render Markdown using marked.js for best UI/UX.
+        return JSONResponse({"result": result_text, "query_type": query_type})
     
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        # Friendly error message for LLM/Groq errors and rate limits
+        err_msg = str(e)
+        if (
+            'GroqException' in err_msg or 'APIError' in err_msg or 'Internal Server Error' in err_msg or
+            'rate_limit_exceeded' in err_msg or 'RateLimitError' in err_msg or 'rate limit reached' in err_msg
+        ):
+            user_msg = (
+                "<b>Sorry, the AI service is temporarily unavailable or rate-limited.</b><br>"
+                "You have reached the daily or per-minute usage limit for the current model.<br>"
+                "Please try again later, reduce the length of your query, or consider upgrading your service tier if you need more usage.<br>"
+                "<br><small>Provider info: <a href='https://docs.litellm.ai/docs/providers' target='_blank'>Provider List</a></small>"
+            )
+            return JSONResponse({"error": user_msg}, status_code=503)
+        return JSONResponse({"error": err_msg}, status_code=500)

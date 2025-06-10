@@ -10,13 +10,29 @@
   <div class="container">
     <h1>Medical Research Agent</h1>
     <form id="query-form">
-      <input type="text" id="user-query" placeholder="Ask a medical question..." required>
+      <input type="text" id="user-query" placeholder="Ask a medical question..." required autocomplete="off">
       <button type="submit">Ask</button>
     </form>
-    <div id="conversation">
+    <div id="conversation" class="conversation-box">
       <!-- Conversation will be rendered here -->
     </div>
+    <div id="feedback" class="feedback" style="display:none;"></div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script src="/static/app.js"></script>
+  <script>
+    // Show feedback messages (e.g., API errors, rate limits)
+    function showFeedback(msg, type = 'info') {
+      const feedback = document.getElementById('feedback');
+      feedback.innerHTML = msg;
+      feedback.className = 'feedback ' + type;
+      feedback.style.display = 'block';
+      setTimeout(() => { feedback.style.display = 'none'; }, 5000);
+    }
+    // Listen for custom error events from app.js
+    window.addEventListener('agent-error', function(e) {
+      showFeedback(e.detail, 'error');
+    });
+  </script>
 </body>
 </html>
