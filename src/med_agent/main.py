@@ -1,9 +1,7 @@
-# main.py
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, HTMLResponse
 from pydantic import BaseModel
-from med_agent.crew import crew, Task, research_agent
+from med_agent.crew import crew
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 import os
@@ -34,11 +32,11 @@ def get_relevant_answer(user_query: str) -> str:
         # Run the RAG pipeline
         result = crew.kickoff(inputs={"query": user_query})
         
-        # In newer versions of crewAI, the result is the final output string
+        
         if isinstance(result, str):
             answer = result
         else:
-            # Fallback for other return types
+            
             answer = str(result)
             
         # Post-process: ensure answer is not empty and contains PMIDs

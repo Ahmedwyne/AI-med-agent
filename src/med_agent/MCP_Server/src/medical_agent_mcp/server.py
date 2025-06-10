@@ -1,11 +1,10 @@
 import asyncio
-import json
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 from mcp.server.models import InitializationOptions
 import mcp.types as types
 from mcp.server import NotificationOptions, Server
-from pydantic import AnyUrl, BaseModel
+from pydantic import AnyUrl
 import mcp.server.stdio
 
 import httpx

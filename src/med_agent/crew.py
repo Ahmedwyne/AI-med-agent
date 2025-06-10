@@ -3,13 +3,9 @@ import time
 from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
 from crewai.llm import LLM
-from litellm import completion, RateLimitError
-
-# Load environment variables from .env file
-load_dotenv()
-
-# Import your tool implementations
+from litellm import RateLimitError
 from med_agent.tools.pubmed import PubMedSearchTool, PubMedFetchTool
+from med_agent.config.settings import GROQ_MAX_TOKENS
 from med_agent.tools.drugs import DrugInfoTool
 from med_agent.tools.clinicaltrials import ClinicalTrialsGovTool
 from med_agent.tools.cdc import CDCGuidelinesTool
@@ -19,10 +15,13 @@ from med_agent.agents.embedding_tasks import (
     GenerateSummaryTool,
 )
 
+# Load environment variables
+load_dotenv()
+
 # Configure retry parameters
-MAX_RETRIES = 5  # Increased retries
-BASE_DELAY = 10.0  # Increased base delay
-TOKEN_LIMIT = 900  # Lower token limit to stay under TPM
+MAX_RETRIES = 5  
+BASE_DELAY = 10.0  
+TOKEN_LIMIT = GROQ_MAX_TOKENS  
 
 def create_llm_with_retries():
     """Create LLM instance with retry logic for rate limits and force max_tokens limit."""
@@ -104,7 +103,7 @@ research_agent = Agent(
     PubMed IDs (PMIDs) as references.""",
     tools=[pubmed_search, pubmed_fetch, clinical_trials, cdc_guidelines],
     llm=groq_llm,
-    allow_delegation=True,  # Enable MCP delegation
+    allow_delegation=True,  
     verbose=True
 )
 
@@ -115,7 +114,7 @@ drug_expert = Agent(
     I read research findings from MCP notes and contribute my analysis back to the shared context.""",
     tools=[drug_info],
     llm=groq_llm,
-    allow_delegation=True,  # Enable MCP delegation
+    allow_delegation=True,  
     verbose=True
 )
 
@@ -126,7 +125,7 @@ synthesis_agent = Agent(
     I combine literature findings and drug analysis from MCP notes to create comprehensive summaries.""",
     tools=[embed_index, retrieve_chunks, generate_summary, clinical_trials, cdc_guidelines],
     llm=groq_llm,
-    allow_delegation=True,  # Enable MCP delegation
+    allow_delegation=True,  
     verbose=True
 )
 
@@ -137,12 +136,13 @@ crew = Crew(
         Task(
             description="""Search PubMed for the most recent and relevant articles about the user's query.
             Focus on high-quality clinical studies, meta-analyses, and systematic reviews.
+            For each relevant article, fetch the abstract or full text (when available) and extract key findings, results, and conclusions directly related to the user's query.
             Use specific medical terms and boolean operators for precise search.
-            Must include publication dates and impact factors when available.""",
+            Must include publication dates, impact factors, and PMIDs when available.""",
             agent=research_agent,
-            expected_output="A curated list of relevant PubMed articles with brief summaries and publication details",
+            expected_output="A curated list of relevant PubMed articles with extracted key findings, results, and conclusions, including publication details and PMIDs",
             context_format="Medical query: {query}\nRequired information: Recent studies, clinical evidence, safety data",
-            input_keys=["query"],  # Ensure the user's query is passed to the agent/tool
+            input_keys=["query"],
         ),
         Task(
             description="""Analyze drug interactions, mechanisms, and safety profiles.
@@ -153,14 +153,15 @@ crew = Crew(
             expected_output="Detailed analysis of drug interactions, mechanisms, and safety considerations with evidence levels"
         ),
         Task(
-            description="""Generate an evidence-based clinical summary including:
-            1. Key drug interactions and mechanisms
-            2. Risk stratification and patient factors
-            3. Monitoring recommendations
-            4. Alternative approaches if applicable
-            Must cite specific PMIDs and evidence levels for each claim.""",
+            description="""Generate an evidence-based clinical summary that directly answers the user's medical query using the extracted findings from the relevant studies.
+            The summary must:
+            1. Synthesize key findings, results, and conclusions from the fetched studies
+            2. Address the user's specific question with accurate, up-to-date information
+            3. Include key drug interactions and mechanisms, risk stratification, patient factors, and monitoring recommendations if relevant
+            4. Cite specific PMIDs and evidence levels for each claim or recommendation
+            5. Present references as a list of PMIDs at the end of the summary.""",
             agent=synthesis_agent,
-            expected_output="Structured clinical summary with evidence grades and citations"
+            expected_output="Structured, accurate clinical summary that answers the user's query, with evidence grades and PMID citations"
         )
     ],
     verbose=True,

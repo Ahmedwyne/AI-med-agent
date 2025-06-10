@@ -1,7 +1,5 @@
-# med_assistant/tools/pubmed.py
-
-import os
 import requests
+import time
 import json
 import xml.etree.ElementTree as ET
 from typing import Dict, Any
@@ -36,7 +34,6 @@ class PubMedSearchTool(MedicalTool):
 
     def handle_rate_limit(self, delay: float = 6.0):
         """Handle rate limit by implementing exponential backoff."""
-        import time
         time.sleep(delay)  # Wait for the specified delay
 
     def _run(self, query: str = "", **kwargs) -> Dict[str, Any]:
@@ -140,7 +137,7 @@ class PubMedFetchTool(MedicalTool):
                 "id": pmids,
                 "retmode": "xml",
                 "tool": "med_agent",
-                "email": "helloahmedkhawaja@gmail.com"
+                "email": "ahmedkhawaja556@gmail.com"
             }
             
             if NCBI_API_KEY:
@@ -250,29 +247,23 @@ class PubMedFetchTool(MedicalTool):
         sections.append(f"PMID: {article['pmid']}")
         sections.append(f"Title: {article['title']}")
         sections.append(f"Journal: {article['journal']}")
-        # Authors
         if article['authors']:
             sections.append(f"Authors: {'; '.join(article['authors'][:3])}")
             if len(article['authors']) > 3:
                 sections.append(f"    and {len(article['authors']) - 3} more")
-        # Date
         date_parts = []
         for part in ['year', 'month', 'day']:
             if part in article['date']:
                 date_parts.append(article['date'][part])
         if date_parts:
             sections.append(f"Date: {' '.join(date_parts)}")
-        # DOI
         if article['doi']:
             sections.append(f"DOI: {article['doi']}")
-        # Publication Types
         if article['publication_types']:
             sections.append(f"Publication Type: {', '.join(article['publication_types'])}")
-        # MeSH Terms
         if article['mesh_terms']:
             sections.append("MeSH Terms:")
             sections.append("    " + "; ".join(article['mesh_terms']))
-        # Abstract (with improved formatting)
         sections.append("\nAbstract:")
         for label, text in article['abstract_sections'].items():
             if label != "text":

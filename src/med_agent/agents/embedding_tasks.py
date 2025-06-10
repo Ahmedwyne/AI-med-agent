@@ -2,12 +2,10 @@ import os
 import pickle
 import re
 from typing import List, Dict, Any
-
 import faiss
 from sentence_transformers import SentenceTransformer
 from groq import Groq
-
-from med_agent.config.settings import EMBED_MODEL, VECTOR_DIR, GROQ_API_KEY, GROQ_MODEL
+from med_agent.config.settings import EMBED_MODEL, VECTOR_DIR, GROQ_API_KEY, GROQ_MODEL, GROQ_MAX_TOKENS
 from med_agent.tools.base import MedicalTool
 
 # Paths for persistence
@@ -145,7 +143,7 @@ class GenerateSummaryTool(MedicalTool):
             resp = groq_client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=512
+                max_tokens=GROQ_MAX_TOKENS
             )
             answer = resp.choices[0].message.content.strip()
             # Fallback if LLM returns empty or generic answer

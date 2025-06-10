@@ -28,7 +28,7 @@ class ClinicalTrialsGovTool(MedicalTool):
             "fmt": "json"
         }
         try:
-            resp = requests.get(base_url, params=params, timeout=10)
+            resp = requests.get(base_url, params=params, timeout=15)
             resp.raise_for_status()
             data = resp.json()
             studies = data.get("StudyFieldsResponse", {}).get("StudyFields", [])
@@ -38,11 +38,25 @@ class ClinicalTrialsGovTool(MedicalTool):
                 title = study.get("BriefTitle", [None])[0]
                 status = study.get("OverallStatus", [None])[0]
                 summary = study.get("BriefSummary", [None])[0]
+                condition = ", ".join(study.get("Condition", []))
+                phase = ", ".join(study.get("Phase", []))
+                study_type = ", ".join(study.get("StudyType", []))
+                start_date = ", ".join(study.get("StartDate", []))
+                completion_date = ", ".join(study.get("CompletionDate", []))
+                location_city = ", ".join(study.get("LocationCity", []))
+                location_country = ", ".join(study.get("LocationCountry", []))
                 results.append({
                     "nct": nct,
                     "title": title,
                     "status": status,
                     "summary": summary,
+                    "condition": condition,
+                    "phase": phase,
+                    "study_type": study_type,
+                    "start_date": start_date,
+                    "completion_date": completion_date,
+                    "location_city": location_city,
+                    "location_country": location_country,
                     "source": "ClinicalTrials.gov"
                 })
             return results

@@ -29,7 +29,7 @@ document.addEventListener('DOMContentLoaded', function() {
   function renderMessage(text, cls) {
     const div = document.createElement('div');
     div.className = cls;
-    div.textContent = text;
+    div.innerHTML = text;
     conversation.appendChild(div);
     conversation.scrollTop = conversation.scrollHeight;
   }

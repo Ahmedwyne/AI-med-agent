@@ -1,4 +1,5 @@
 import os
+import re
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -27,6 +28,8 @@ def ask_query(request: Request, data: QueryRequest):
     user_query = data.query
     query_type = classify_query_type(user_query)
     print(f"[INFO] Query classified as: {query_type}")
+
+
     # Route to the most relevant agent based on query type
     if query_type == "drug_info":
         agent = drug_expert
@@ -41,6 +44,19 @@ def ask_query(request: Request, data: QueryRequest):
     )
     try:
         result = agent.execute_task(task)
-        return JSONResponse({"result": result, "query_type": query_type})
+        # If result is a dict with 'result' key, extract it
+        if isinstance(result, dict) and 'result' in result:
+            result_text = result['result']
+        else:
+            result_text = result
+        # Format result for better display: preserve line breaks and highlight PMIDs
+        
+        
+        def highlight_pmids(text):
+            # Make PMIDs bold and clickable to PubMed
+            return re.sub(r'(PMID: ?(\d+))', r'<b><a href="https://pubmed.ncbi.nlm.nih.gov/\2/" target="_blank">\1</a></b>', text)
+        formatted_result = highlight_pmids(result_text).replace('\n', '<br>')
+        return JSONResponse({"result": formatted_result, "query_type": query_type})
+    
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)

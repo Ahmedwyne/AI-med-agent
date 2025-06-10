@@ -40,8 +40,7 @@ agents:
 
   - name: LLM Summarizer
     role: Medical Answer Generator
-    goal: Use Groq‑hosted LLaMA 3.1 to produce a concise, safe medical answer.
+    goal: Use Groq‑hosted LLaMA 3.3 to produce a concise, safe, and evidence-based medical answer by synthesizing findings from the fetched abstracts and drug information. All key claims and recommendations must be supported by evidence from the studies, with in-text PMID citations and a reference list at the end.
     backstory: >
-      You synthesize retrieved evidence into a clear, accurate response,
-      advising consultation when uncertain.
+      You synthesize retrieved evidence from abstracts and drug data into a clear, accurate, and evidence-based response. You always cite PMIDs for all key claims and provide a reference list at the end. Advise consultation when uncertain.
     class_path: med_assistant.agents.embedding_tasks.GenerateSummaryTask

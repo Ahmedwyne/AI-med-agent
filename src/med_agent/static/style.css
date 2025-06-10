@@ -59,6 +59,19 @@ button:hover {
 .agent-msg {
   background: #f1f5f9;
   border-left: 4px solid #2563eb;
+  word-break: break-word;
+}
+.agent-msg b a {
+  color: #1e40af;
+  text-decoration: underline;
+  font-weight: bold;
+}
+.agent-msg b {
+  font-weight: bold;
+}
+.agent-msg a {
+  color: #1e40af;
+  text-decoration: underline;
 }
 .error {
   color: #b91c1c;

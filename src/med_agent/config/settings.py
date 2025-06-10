@@ -10,8 +10,8 @@ load_dotenv(dotenv_path)
 # Groq LLM settings
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-GROQ_MAX_RETRIES = int(os.getenv("GROQ_MAX_RETRIES", 5))  # increased max retries
-GROQ_RETRY_DELAY = float(os.getenv("GROQ_RETRY_DELAY", 10.0))  # increased delay between retries
+GROQ_MAX_RETRIES = int(os.getenv("GROQ_MAX_RETRIES", 5))  
+GROQ_RETRY_DELAY = float(os.getenv("GROQ_RETRY_DELAY", 10.0))  
 GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", 1024))  # reduced from 2048 to stay within stricter limits
 GROQ_RATE_LIMIT_TPM = int(os.getenv("GROQ_RATE_LIMIT_TPM", 12000))  # tokens per minute limit
 
@@ -21,7 +21,7 @@ EMBED_MODEL  = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
 # Vector store settings
 VECTOR_DIR   = os.getenv("VECTOR_INDEX_DIR", "med_agent/vector_store")
 
-# Drug API key (if required) - optional
+# Drug API key (for RxNorm )
 DRUG_API_KEY = os.getenv("DRUG_API_KEY")
 
 # PubMed settings
