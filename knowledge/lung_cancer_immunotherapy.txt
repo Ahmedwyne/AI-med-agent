@@ -1,0 +1,3 @@
+Title: Advances in Immunotherapy for Lung Cancer
+
+Immunotherapy has revolutionized the treatment of lung cancer, particularly non-small cell lung cancer (NSCLC). Immune checkpoint inhibitors targeting PD-1, PD-L1, and CTLA-4 have demonstrated significant improvements in overall survival and progression-free survival in multiple clinical trials. Combination therapies with chemotherapy or other immunotherapies are being actively investigated. Despite these advances, only a subset of patients respond, and predictive biomarkers are under study. (PMID: 34567890)

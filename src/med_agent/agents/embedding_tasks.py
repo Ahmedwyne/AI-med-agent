@@ -152,3 +152,20 @@ class GenerateSummaryTool(MedicalTool):
             return {"answer": answer}
         except Exception as e:
             return {"answer": f"LLM error: {str(e)}"}
+
+
+if __name__ == "__main__":
+    # Embed all .txt files in the knowledge/ folder
+    knowledge_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../knowledge'))
+    all_text = []
+    for fname in os.listdir(knowledge_dir):
+        if fname.endswith('.txt'):
+            with open(os.path.join(knowledge_dir, fname), 'r', encoding='utf-8') as f:
+                all_text.append(f.read())
+    if all_text:
+        print(f"Embedding {len(all_text)} documents from 'knowledge/'...")
+        tool = EmbedAndIndexTool()
+        result = tool._run("\n".join(all_text))
+        print(f"Embedding result: {result}")
+    else:
+        print("No .txt files found in 'knowledge/' folder. Nothing embedded.")

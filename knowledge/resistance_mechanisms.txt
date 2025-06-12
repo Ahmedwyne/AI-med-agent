@@ -1,0 +1,3 @@
+Title: Mechanisms of Resistance to Immunotherapy
+
+Primary and acquired resistance to immune checkpoint inhibitors remains a major challenge in lung cancer treatment. Mechanisms include loss of antigen presentation, upregulation of alternative immune checkpoints, and changes in the tumor microenvironment. Research is ongoing to identify biomarkers and develop strategies to overcome resistance. (PMID: 32345678)

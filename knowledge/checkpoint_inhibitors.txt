@@ -1,0 +1,3 @@
+Title: Combination Immunotherapy Strategies
+
+Recent studies suggest that combining immunotherapy with chemotherapy or targeted therapy can enhance anti-tumor responses in lung cancer. The KEYNOTE-189 trial demonstrated that pembrolizumab plus chemotherapy improved survival in metastatic NSCLC. Ongoing trials are evaluating novel combinations and sequencing strategies. (PMID: 31223344)

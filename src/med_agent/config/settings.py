@@ -16,7 +16,9 @@ GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS"))  # reduced from 2048 to stay
 GROQ_RATE_LIMIT_TPM = int(os.getenv("GROQ_RATE_LIMIT_TPM", 12000))  # tokens per minute limit
 
 # Embedding model for SentenceTransformer
-EMBED_MODEL  = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
+EMBED_MODEL  = os.getenv("EMBED_MODEL")
+
+# all-MiniLM-L6-v2
 
 # Vector store settings
 VECTOR_DIR   = os.getenv("VECTOR_INDEX_DIR", "med_agent/vector_store")
@@ -25,8 +27,8 @@ VECTOR_DIR   = os.getenv("VECTOR_INDEX_DIR", "med_agent/vector_store")
 DRUG_API_KEY = os.getenv("DRUG_API_KEY")
 
 # PubMed settings
-PUBMED_RETMAX = int(os.getenv("PUBMED_RETMAX", 5))
-NCBI_API_KEY = os.getenv("NCBI_API_KEY", "")
+PUBMED_RETMAX = int(os.getenv("PUBMED_RETMAX"))
+NCBI_API_KEY = os.getenv("NCBI_API_KEY")
 
 # Validate required variables
 required_vars = {"GROQ_API_KEY": GROQ_API_KEY, "EMBED_MODEL": EMBED_MODEL}
