@@ -9,16 +9,21 @@ import mcp.server.stdio
 
 import httpx
 from urllib.parse import quote_plus
+from med_agent.tools.cdc import CDCGuidelines
 
 # PubMed API constants
 PUBMED_API_BASE = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 DRUGBANK_API_BASE = "https://api.drugbank.com/v1"
+CLINICALTRIALS_API_BASE = "https://clinicaltrials.gov/api/v1"
 
 # Store notes as a simple key-value dict to demonstrate state management
 notes: dict[str, str] = {}
 
 # Initialize the httpx client
 http_client = httpx.AsyncClient()
+
+# Initialize CDC guidelines tool
+cdc_tool = CDCGuidelines()
 
 server = Server("medical-agent-mcp")
 
@@ -78,6 +83,62 @@ async def lookup_drug(name: str) -> Dict[str, str]:
         "side_effects": "Actual drug information should be obtained from authorized sources."
     }
     return drug_info
+
+async def search_clinicaltrials(query: str, max_results: int = 5) -> List[Dict[str, str]]:
+    """Search ClinicalTrials.gov for studies matching the query."""
+    # This is a simplified example using the ClinicalTrials.gov v1 API
+    # For production, use the latest API and handle pagination, errors, etc.
+    search_url = f"https://clinicaltrials.gov/api/query/study_fields"
+    params = {
+        "expr": query,
+        "fields": "NCTId,BriefTitle,Condition,InterventionName,LocationCity,LocationCountry,OverallStatus,StartDate,CompletionDate,BriefSummary",
+        "min_rnk": 1,
+        "max_rnk": max_results,
+        "fmt": "json"
+    }
+    async with http_client.get(search_url, params=params) as response:
+        data = response.json()
+        studies = data.get("StudyFieldsResponse", {}).get("StudyFields", [])
+        results = []
+        for study in studies:
+            results.append({
+                "nct_id": study.get("NCTId", [""])[0],
+                "title": study.get("BriefTitle", [""])[0],
+                "condition": ", ".join(study.get("Condition", [])),
+                "intervention": ", ".join(study.get("InterventionName", [])),
+                "location": ", ".join(study.get("LocationCity", []) + study.get("LocationCountry", [])),
+                "status": study.get("OverallStatus", [""])[0],
+                "start_date": study.get("StartDate", [""])[0],
+                "completion_date": study.get("CompletionDate", [""])[0],
+                "summary": study.get("BriefSummary", [""])[0],
+                "url": f"https://clinicaltrials.gov/study/{study.get('NCTId', [''])[0]}"
+            })
+        return results
+
+# --- CDC Guidelines tool ---
+async def search_cdc_guidelines(query: str, max_results: int = 3) -> list[dict]:
+    """Search CDC guidelines using web scraping."""
+    try:
+        results = cdc_tool._run(query, max_results)
+        return [{
+            "title": result["title"],
+            "summary": result["summary"],
+            "url": result["link"],
+            "date": "",  # Date not available in current implementation
+            "recommendation": f"Evidence Level: {result['evidence_level']}"
+        } for result in results]
+    except Exception as e:
+        print(f"Error searching CDC guidelines: {e}")
+        # Fallback to web search if scraping fails
+        search_url = f"https://www.cdc.gov/search/?query={quote_plus(query)}"
+        return [{
+            "title": "CDC Search Results",
+            "summary": "Please visit the CDC website to view guidelines for your query.",
+            "url": search_url,
+            "date": "",
+            "recommendation": "Visit CDC website for detailed recommendations."
+        }]
+    
 
 @server.list_resources()
 async def handle_list_resources() -> list[types.Resource]:
@@ -188,6 +249,29 @@ async def handle_list_tools() -> list[types.Tool]:
                 "required": ["name"],
             },
         ),
+        types.Tool(
+            name="search-clinicaltrials",
+            description="Search ClinicalTrials.gov for clinical studies",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                    "max_results": {"type": "integer", "minimum": 1, "maximum": 10},
+                },
+                "required": ["query"],
+            },
+        ),
+        types.Tool(
+            name="search-cdc-guidelines",
+            description="Search CDC guidelines (mock)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string"},
+                },
+                "required": ["query"],
+            },
+        ),
     ]
 
 @server.call_tool()
@@ -258,7 +342,53 @@ async def handle_call_tool(
                 )
             )
         ]
-    
+    elif name == "search-clinicaltrials":
+        query = arguments.get("query")
+        if not query:
+            raise ValueError("Missing query")
+        max_results = arguments.get("max_results", 5)
+        results = await search_clinicaltrials(query, max_results)
+        if not results:
+            return [types.TextContent(type="text", text="No results found")]
+        formatted_results = []
+        for study in results:
+            formatted_results.append(
+                types.TextContent(
+                    type="text",
+                    text=f"NCT ID: {study['nct_id']}\n"
+                         f"Title: {study['title']}\n"
+                         f"Condition: {study['condition']}\n"
+                         f"Intervention: {study['intervention']}\n"
+                         f"Location: {study['location']}\n"
+                         f"Status: {study['status']}\n"
+                         f"Start Date: {study['start_date']}\n"
+                         f"Completion Date: {study['completion_date']}\n"
+                         f"Summary: {study['summary']}\n"
+                         f"URL: {study['url']}\n"
+                )
+            )
+        return formatted_results    
+    elif name == "search-cdc-guidelines":
+        query = arguments.get("query")
+        if not query:
+            raise ValueError("Missing query")
+        results = await search_cdc_guidelines(query)
+        formatted = []
+        for guideline in results:
+            formatted.append(
+                types.TextContent(
+                    type="text",
+                    text=(
+                        f"Title: {guideline['title']}\n"
+                        f"Date: {guideline['date']}\n"
+                        f"Recommendation: {guideline['recommendation']}\n"
+                        f"Summary: {guideline['summary']}\n"
+                        f"URL: {guideline['url']}\n"
+                    )
+                )
+            )
+        return formatted
+
     raise ValueError(f"Unknown tool: {name}")
 
 async def main():

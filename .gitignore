@@ -20,6 +20,6 @@ src/med_agent/tools/__pycache__/
 /src/med_agent/MCP_Server/.python-version
 /uv.lock
 
-/tests
+/tests/
 /tests/__pycache__/
 /tests/.pytest_cache/   

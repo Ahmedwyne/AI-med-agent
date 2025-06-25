@@ -2,12 +2,21 @@ from med_agent.tools.base import MedicalTool
 from typing import List, Dict
 import logging
 
-class SynthesisTool(MedicalTool):
-    """
-    Synthesizes a structured, evidence-based answer from article summaries and other sources.
-    """
-    name: str = "SynthesisTool"
-    description: str = "Synthesizes a concise, structured, and evidence-based answer to the user query using provided article summaries and other reputable sources."
+class EvidenceSynthesizer(MedicalTool):
+    name = "EvidenceSynthesizer"
+    description = "Synthesizes and grades medical evidence from multiple sources"
+
+class RecommendationGenerator(MedicalTool):
+    name = "RecommendationGenerator"
+    description = "Generates clinical recommendations based on evidence"
+
+class OutputFormatter(MedicalTool):
+    name = "OutputFormatter"
+    description = "Formats medical evidence and recommendations into structured output"
+
+class CitationManager(MedicalTool):
+    name = "CitationManager"
+    description = "Manages and formats medical citations"
 
     def _run(self, query: str, articles: List[Dict], other_sources: List[Dict] = None) -> str:
         """

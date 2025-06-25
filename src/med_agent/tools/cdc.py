@@ -4,12 +4,12 @@ import requests
 import logging
 from bs4 import BeautifulSoup
 
-class CDCGuidelinesTool(MedicalTool):
+class CDCGuidelines(MedicalTool):
     """
     Fetches and summarizes relevant CDC guidelines for a given query using web scraping.
     """
-    name: str = "CDCGuidelinesTool"
-    description: str = "Fetches and summarizes relevant CDC guidelines."
+    name: str = "CDCGuidelines"
+    description: str = "Fetch and parse CDC guidelines for medical queries"
 
     def _run(self, query: str, max_results: int = 3) -> List[Dict]:
         """

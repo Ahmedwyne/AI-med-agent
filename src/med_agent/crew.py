@@ -4,11 +4,11 @@ from dotenv import load_dotenv
 from crewai import Agent, Task, Crew
 from crewai.llm import LLM
 from litellm import RateLimitError
-from med_agent.tools.pubmed import PubMedSearchTool, PubMedFetchTool
+from med_agent.tools.pubmed import PubMedSearch, PubMedFetch
 from med_agent.config.settings import GROQ_MAX_TOKENS
 from med_agent.tools.drugs import DrugInfoTool
-from med_agent.tools.clinicaltrials import ClinicalTrialsGovTool
-from med_agent.tools.cdc import CDCGuidelinesTool
+from med_agent.tools.clinicaltrials import ClinicalTrialsSearch
+from med_agent.tools.cdc import CDCGuidelines
 from med_agent.agents.embedding_tasks import (
     EmbedAndIndexTool,
     RetrieveChunksTool,
@@ -85,11 +85,11 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 groq_llm = create_llm_with_retries()
 
 # Initialize tools
-pubmed_search = PubMedSearchTool()
-pubmed_fetch = PubMedFetchTool()
+pubmed_search = PubMedSearch()
+pubmed_fetch = PubMedFetch()
 drug_info = DrugInfoTool()
-clinical_trials = ClinicalTrialsGovTool()
-cdc_guidelines = CDCGuidelinesTool()
+clinical_trials = ClinicalTrialsSearch()
+cdc_guidelines = CDCGuidelines()
 embed_index = EmbedAndIndexTool()
 retrieve_chunks = RetrieveChunksTool()
 generate_summary = GenerateSummaryTool()
@@ -122,8 +122,8 @@ synthesis_agent = Agent(
     role="Medical Information Synthesizer", 
     goal="Process and synthesize medical information",
     backstory="""I excel at understanding and summarizing complex medical information.
-    I combine literature findings and drug analysis from MCP notes to create comprehensive summaries.""",
-    tools=[embed_index, retrieve_chunks, generate_summary, clinical_trials, cdc_guidelines],
+    I always prioritize real-time evidence from PubMed, CDC, and ClinicalTrials.gov, drug database and only use local vector store data if no relevant live evidence is found.""",
+    tools=[pubmed_search, pubmed_fetch, clinical_trials, cdc_guidelines, retrieve_chunks, generate_summary, embed_index],
     llm=groq_llm,
     allow_delegation=True,  
     verbose=True
@@ -134,34 +134,67 @@ crew = Crew(
     agents=[research_agent, drug_expert, synthesis_agent],
     tasks=[
         Task(
-            description="""Search PubMed for the most recent and relevant articles about the user's query.
-            Focus on high-quality clinical studies, meta-analyses, and systematic reviews.
-            For each relevant article, fetch the abstract or full text (when available) and extract key findings, results, and conclusions directly related to the user's query.
-            Use specific medical terms and boolean operators for precise search.
-            Must include publication dates, impact factors, and PMIDs when available.""",
+            description="""Research Phase:
+            1. Search PubMed for the most recent (last 2 years) and relevant articles about the user's query
+            2. Prioritize: meta-analyses > systematic reviews > RCTs > observational studies
+            3. For each article:
+                - Extract and grade evidence (A: High, B: Moderate, C: Low)
+                - Document: PMID, publication date, journal impact factor, study type
+                - Summarize key findings, methodology, and limitations
+            4. Search ClinicalTrials.gov for ongoing relevant trials
+            5. Check CDC guidelines for current recommendations
+            Store all findings in MCP notes with proper citation formatting.""",
             agent=research_agent,
-            expected_output="A curated list of relevant PubMed articles with extracted key findings, results, and conclusions, including publication details and PMIDs",
-            context_format="Medical query: {query}\nRequired information: Recent studies, clinical evidence, safety data",
-            input_keys=["query"],
+            expected_output="""Structured research findings with:
+            1. Evidence table (Study details, PMID, evidence grade)
+            2. Key findings by evidence level
+            3. Ongoing clinical trials summary
+            4. Current guideline recommendations""",
+            context_format="Medical query: {query}\nRequired focus: {focus_areas}",
+            input_keys=["query", "focus_areas"],
         ),
         Task(
-            description="""Analyze drug interactions, mechanisms, and safety profiles.
-            Extract specific dosing concerns, contraindications, and risk factors.
-            Prioritize evidence from clinical guidelines and FDA recommendations.
-            Cross-reference drug information with the research findings.""",
+            description="""Drug Analysis Phase:
+            1. Review research findings from MCP notes
+            2. For each relevant drug/therapy:
+                - Document mechanism of action
+                - Analyze safety profile and contraindications
+                - Review drug-drug interactions
+                - Extract specific dosing guidelines
+                - Note monitoring requirements
+            3. Cross-reference findings with:
+                - FDA recommendations
+                - Current clinical guidelines
+                - Phase III/IV trial data
+            4. Grade recommendations (Class I, IIa, IIb, III)""",
             agent=drug_expert,
-            expected_output="Detailed analysis of drug interactions, mechanisms, and safety considerations with evidence levels"
+            expected_output="""Detailed drug analysis with:
+            1. Drug mechanisms and interactions
+            2. Safety profiles with evidence grades
+            3. Monitoring recommendations
+            4. Recommendation classification""",
         ),
         Task(
-            description="""Generate an evidence-based clinical summary that directly answers the user's medical query using the extracted findings from the relevant studies.
-            The summary must:
-            1. Synthesize key findings, results, and conclusions from the fetched studies
-            2. Address the user's specific question with accurate, up-to-date information
-            3. Include key drug interactions and mechanisms, risk stratification, patient factors, and monitoring recommendations if relevant
-            4. Cite specific PMIDs and evidence levels for each claim or recommendation
-            5. Present references as a list of PMIDs at the end of the summary.""",
+            description="""Synthesis Phase:
+            1. Integrate findings from research and drug analysis phases
+            2. Generate evidence-based summary addressing:
+                - Primary clinical question
+                - Current evidence overview
+                - Specific recommendations with grades
+                - Safety considerations
+                - Monitoring requirements
+            3. Format output with:
+                - Clear evidence levels for each statement
+                - In-text PMID citations
+                - Organized sections with headers
+                - Clinical pearls and key warnings
+                - Reference list with PMIDs and evidence grades""",
             agent=synthesis_agent,
-            expected_output="Structured, accurate clinical summary that answers the user's query, with evidence grades and PMID citations"
+            expected_output="""Comprehensive clinical summary with:
+            1. Evidence-based answers to query
+            2. Graded recommendations
+            3. Safety and monitoring guidance
+            4. Properly cited references""",
         )
     ],
     verbose=True,

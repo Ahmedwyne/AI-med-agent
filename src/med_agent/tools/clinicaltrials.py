@@ -4,12 +4,12 @@ import requests
 import logging
 import urllib.parse
 
-class ClinicalTrialsGovTool(MedicalTool):
+class ClinicalTrialsSearch(MedicalTool):
     """
     Fetches and summarizes relevant clinical trial evidence from ClinicalTrials.gov for a given query.
     """
-    name: str = "ClinicalTrialsGovTool"
-    description: str = "Fetches and summarizes relevant clinical trial evidence from ClinicalTrials.gov."
+    name: str = "ClinicalTrialsSearch"
+    description: str = "Search ClinicalTrials.gov for relevant trials"
 
     def _run(self, query: str, max_results: int = 3) -> List[Dict]:
         """

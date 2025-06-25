@@ -28,7 +28,7 @@ DRUG_API_KEY = os.getenv("DRUG_API_KEY")
 
 # PubMed settings
 PUBMED_RETMAX = int(os.getenv("PUBMED_RETMAX"))
-NCBI_API_KEY = os.getenv("NCBI_API_KEY")
+NCBI_API_KEY = os.getenv("NCBI_API_KEY")  # Get NCBI API key from environment
 
 # Validate required variables
 required_vars = {"GROQ_API_KEY": GROQ_API_KEY, "EMBED_MODEL": EMBED_MODEL}
