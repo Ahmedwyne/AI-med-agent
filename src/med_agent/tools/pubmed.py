@@ -43,7 +43,7 @@ class PubMedSearch(MedicalTool):
                     "retmode": "json",
                     "usehistory": "y",
                     "tool": "med_agent",
-                    "email": "ahmedkhawaja556@gmail.com"
+                    "email": "enter your email here"
                 }
                 if 'NCBI_API_KEY' in globals() and NCBI_API_KEY:
                     params["api_key"] = NCBI_API_KEY
@@ -103,7 +103,7 @@ class PubMedFetch(MedicalTool):
                 "id": ",".join(pmids),
                 "retmode": "xml",
                 "tool": "med_agent",
-                "email": "ahmedkhawaja556@gmail.com"
+                "email": "enter your email here"
             }
             if 'NCBI_API_KEY' in globals() and NCBI_API_KEY:
                 params["api_key"] = NCBI_API_KEY
