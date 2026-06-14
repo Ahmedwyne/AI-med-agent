@@ -1,12 +1,12 @@
+import logging
 import os
 import pickle
 import re
 from typing import List, Dict, Any
-import faiss
-from sentence_transformers import SentenceTransformer
-from groq import Groq
-from med_agent.config.settings import EMBED_MODEL, VECTOR_DIR, GROQ_API_KEY, GROQ_MODEL, GROQ_MAX_TOKENS
+from med_agent.config.settings import EMBED_MODEL, VECTOR_DIR, GROQ_API_KEY, GROQ_MODEL, GROQ_MAX_TOKENS, LLM_MAX_TOKENS
 from med_agent.tools.base import MedicalTool
+
+logger = logging.getLogger(__name__)
 
 # Paths for persistence
 INDEX_PATH   = os.path.join(VECTOR_DIR, "faiss_index.bin")
@@ -15,9 +15,34 @@ CHUNKS_PATH  = os.path.join(VECTOR_DIR, "chunks.pkl")
 # Ensure vector directory exists
 os.makedirs(VECTOR_DIR, exist_ok=True)
 
-# Initialize models
-embedder   = SentenceTransformer(EMBED_MODEL)
-groq_client = Groq(api_key=GROQ_API_KEY)
+# Lazy-load heavy ML deps so the app starts even without them installed
+_embedder = None
+_groq_client = None
+
+# In-memory FAISS cache — reloaded only when the index file changes on disk
+_faiss_index = None
+_faiss_chunks: list | None = None
+_faiss_index_mtime: float | None = None
+
+def _get_embedder():
+    global _embedder
+    if _embedder is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+            _embedder = SentenceTransformer(EMBED_MODEL)
+        except ImportError:
+            raise ImportError(
+                "sentence-transformers is not installed. "
+                "Run: uv pip install sentence-transformers faiss-cpu"
+            )
+    return _embedder
+
+def _get_groq_client():
+    global _groq_client
+    if _groq_client is None:
+        from groq import Groq
+        _groq_client = Groq(api_key=GROQ_API_KEY)
+    return _groq_client
 
 
 def sentence_chunk(text: str, max_sentences: int = 3, overlap: int = 1) -> List[str]:
@@ -49,18 +74,27 @@ class EmbedAndIndexTool(MedicalTool):
         if not text.strip():
             return {"status": "no_text"}
 
-        chunks = sentence_chunk(text)
-        embeddings = embedder.encode(chunks).astype("float32")
+        try:
+            import faiss
+        except ImportError:
+            return {"status": "error", "error": "faiss-cpu not installed. Run: uv pip install faiss-cpu sentence-transformers"}
 
-        # Build a FlatL2 index
+        chunks = sentence_chunk(text)
+        embeddings = _get_embedder().encode(chunks).astype("float32")
+
         dim = embeddings.shape[1]
         index = faiss.IndexFlatL2(dim)
         index.add(embeddings)
 
-        # Persist index and chunks
         faiss.write_index(index, INDEX_PATH)
         with open(CHUNKS_PATH, "wb") as f:
             pickle.dump(chunks, f)
+
+        # Invalidate in-memory cache so the next retrieval reloads the new index
+        global _faiss_index, _faiss_chunks, _faiss_index_mtime
+        _faiss_index = None
+        _faiss_chunks = None
+        _faiss_index_mtime = None
 
         return {"status": "indexed", "num_chunks": len(chunks)}
 
@@ -84,13 +118,23 @@ class RetrieveChunksTool(MedicalTool):
         if not query.strip() or not os.path.exists(INDEX_PATH):
             return {"contexts": []}
 
-        # Load index and chunks
-        index = faiss.read_index(INDEX_PATH)
-        with open(CHUNKS_PATH, "rb") as f:
-            chunks = pickle.load(f)
+        try:
+            import faiss
+        except ImportError:
+            return {"contexts": [], "error": "faiss-cpu not installed"}
 
-        # Embed & search
-        q_embed = embedder.encode([query]).astype("float32")
+        global _faiss_index, _faiss_chunks, _faiss_index_mtime
+        current_mtime = os.path.getmtime(INDEX_PATH)
+        if _faiss_index is None or current_mtime != _faiss_index_mtime:
+            _faiss_index = faiss.read_index(INDEX_PATH)
+            with open(CHUNKS_PATH, "rb") as f:
+                _faiss_chunks = pickle.load(f)
+            _faiss_index_mtime = current_mtime
+
+        index = _faiss_index
+        chunks = _faiss_chunks
+
+        q_embed = _get_embedder().encode([query]).astype("float32")
         distances, ids = index.search(q_embed, k=3)
         top_chunks = [chunks[i] for i in ids[0] if i < len(chunks)]
 
@@ -140,10 +184,10 @@ class GenerateSummaryTool(MedicalTool):
             "ANSWER (with citations):"
         )
         try:
-            resp = groq_client.chat.completions.create(
+            resp = _get_groq_client().chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                max_tokens=GROQ_MAX_TOKENS
+                max_tokens=LLM_MAX_TOKENS
             )
             answer = resp.choices[0].message.content.strip()
             # Fallback if LLM returns empty or generic answer
@@ -163,9 +207,9 @@ if __name__ == "__main__":
             with open(os.path.join(knowledge_dir, fname), 'r', encoding='utf-8') as f:
                 all_text.append(f.read())
     if all_text:
-        print(f"Embedding {len(all_text)} documents from 'knowledge/'...")
+        logger.info(f"Embedding {len(all_text)} documents from 'knowledge/'...")
         tool = EmbedAndIndexTool()
         result = tool._run("\n".join(all_text))
-        print(f"Embedding result: {result}")
+        logger.info(f"Embedding result: {result}")
     else:
-        print("No .txt files found in 'knowledge/' folder. Nothing embedded.")
+        logger.warning("No .txt files found in 'knowledge/' folder. Nothing embedded.")

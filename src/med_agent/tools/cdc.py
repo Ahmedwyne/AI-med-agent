@@ -1,6 +1,6 @@
-from med_agent.tools.base import MedicalTool
+from med_agent.tools.base import MedicalTool, http_session
+from med_agent.tools.cache import get_cached
 from typing import List, Dict
-import requests
 import logging
 from bs4 import BeautifulSoup
 
@@ -19,11 +19,14 @@ class CDCGuidelines(MedicalTool):
         Returns:
             List[Dict]: List of guideline summaries with title, summary, link, and evidence level.
         """
+        return get_cached(f"CDCGuidelines:{query}:{max_results}", lambda: self._fetch(query, max_results), ttl=21600)
+
+    def _fetch(self, query: str, max_results: int) -> List[Dict]:
         logging.debug(f"Searching CDC guidelines for: {query}")
         search_url = f"https://www.cdc.gov/search/index.html"
         params = {"query": query, "sitelimit": "www.cdc.gov"}
         try:
-            resp = requests.get(search_url, params=params, timeout=10)
+            resp = http_session.get(search_url, params=params, timeout=10)
             resp.raise_for_status()
             soup = BeautifulSoup(resp.text, "html.parser")
             results = []
@@ -44,25 +47,9 @@ class CDCGuidelines(MedicalTool):
                     "evidence_level": "Guideline"
                 })
             if not results:
-                # fallback to placeholder if nothing found
-                return [
-                    {
-                        "title": f"CDC Guidance on {query.title()}",
-                        "summary": f"Summary of CDC recommendations for {query} (example).",
-                        "link": f"https://www.cdc.gov/search.html?q={query.replace(' ', '+')}",
-                        "source": "CDC",
-                        "evidence_level": "Guideline"
-                    }
-                ]
+                logging.info(f"CDC search returned no results for query: {query}")
+                return []
             return results
         except Exception as e:
             logging.error(f"CDC guideline fetch error: {e}")
-            return [
-                {
-                    "title": f"CDC Guidance on {query.title()}",
-                    "summary": f"Summary of CDC recommendations for {query} (example).",
-                    "link": f"https://www.cdc.gov/search.html?q={query.replace(' ', '+')}",
-                    "source": "CDC",
-                    "evidence_level": "Guideline"
-                }
-            ]
+            return []

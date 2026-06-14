@@ -1,0 +1,22 @@
+services:
+  medagent:
+    build: .
+    image: medagent:latest
+    container_name: medagent
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      # Persist the vector store between restarts
+      - vector_store:/app/med_agent/vector_store
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  vector_store:

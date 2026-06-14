@@ -1,18 +1,24 @@
-import requests
 import time
 import json
 import xml.etree.ElementTree as ET
 from typing import Dict, Any, Optional
 import logging
-from med_agent.tools.base import MedicalTool
-from med_agent.config.settings import NCBI_API_KEY
+import requests
+from med_agent.tools.base import MedicalTool, http_session
+from med_agent.tools.cache import get_cached
+from med_agent.config.settings import NCBI_API_KEY, NCBI_EMAIL
+
+logger = logging.getLogger(__name__)
+
+if not NCBI_EMAIL:
+    logging.warning("NCBI_EMAIL is not set. Set NCBI_EMAIL in .env to comply with NCBI ToS.")
 
 # NCBI E‑utilities endpoints
 BASE_URL = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils"
 ESEARCH_URL = f"{BASE_URL}/esearch.fcgi"
 EFETCH_URL = f"{BASE_URL}/efetch.fcgi"
 
-PUBMED_RETMAX = 20  # Max results to return
+PUBMED_RETMAX = 5  # Keep small: fewer articles = less context, faster pipeline
 
 class PubMedSearch(MedicalTool):
     """Search PubMed for medical articles."""
@@ -20,9 +26,9 @@ class PubMedSearch(MedicalTool):
     description: str = "Search PubMed for medical articles."
 
     def build_query(self, query: str) -> str:
-        terms = query.lower().split()
-        field_queries = [f"{term}[All Fields]" for term in terms]
-        return " AND ".join(field_queries)
+        # Pass the query as-is; PubMed handles natural language and phrase search well.
+        # Wrapping every word in [All Fields] AND ... is overly restrictive.
+        return query
 
     def handle_rate_limit(self, delay: float = 6.0):
         time.sleep(delay)
@@ -31,8 +37,11 @@ class PubMedSearch(MedicalTool):
         if not query:
             query = kwargs.get("query", "")
         if not query:
-            print("[DEBUG] PubMedSearch._run: No valid query provided.")
-            return {"pmids": []}
+            logger.debug("PubMedSearch._run: No valid query provided.")
+            return {"pmids": [], "count": 0, "query": query}
+        return get_cached(f"PubMedSearch:{query}", lambda: self._fetch(query), ttl=3600)
+
+    def _fetch(self, query: str) -> Dict[str, Any]:
         max_retries = 3
         base_delay = 6.0
         for attempt in range(max_retries):
@@ -43,12 +52,12 @@ class PubMedSearch(MedicalTool):
                     "retmode": "json",
                     "usehistory": "y",
                     "tool": "med_agent",
-                    "email": "enter your email here"
+                    "email": NCBI_EMAIL,
                 }
-                if 'NCBI_API_KEY' in globals() and NCBI_API_KEY:
+                if NCBI_API_KEY:
                     params["api_key"] = NCBI_API_KEY
                 params["term"] = self.build_query(query)
-                resp = requests.get(ESEARCH_URL, params=params, timeout=10)
+                resp = http_session.get(ESEARCH_URL, params=params, timeout=10)
                 resp.raise_for_status()
                 try:
                     data = resp.json()
@@ -59,55 +68,47 @@ class PubMedSearch(MedicalTool):
                 except json.JSONDecodeError:
                     root = ET.fromstring(resp.text)
                     id_list = [id_elem.text for id_elem in root.findall(".//Id")]
-                if not id_list:
-                    simple_query = " AND ".join([term for term in query.split() if term.lower() not in ["the", "a", "an"]])
-                    params["term"] = simple_query
-                    resp = requests.get(ESEARCH_URL, params=params, timeout=10)
-                    resp.raise_for_status()
-                    try:
-                        data = resp.json()
-                        if "esearchresult" in data and "idlist" in data["esearchresult"]:
-                            id_list = data["esearchresult"]["idlist"]
-                    except json.JSONDecodeError:
-                        root = ET.fromstring(resp.text)
-                        id_list = [id_elem.text for id_elem in root.findall(".//Id")]
-                print(f"Found {len(id_list)} results for query: {query}")
-                return {"pmids": id_list[:PUBMED_RETMAX]}
+                pmids = id_list[:PUBMED_RETMAX]
+                logger.info(f"PubMed search: {len(pmids)} results for query: {query!r}")
+                if not pmids:
+                    return {"pmids": [], "count": 0, "query": query, "message": "No PubMed articles found for this query."}
+                return {"pmids": pmids, "count": len(pmids), "query": query}
             except requests.exceptions.RequestException as e:
                 if attempt < max_retries - 1:
                     delay = base_delay * (2 ** attempt)
                     self.handle_rate_limit(delay)
                     continue
-                print(f"PubMed search error: {str(e)}")
-                return {"pmids": [], "error": f"PubMed search error: {str(e)}"}
+                return {"pmids": [], "count": 0, "query": query, "error": str(e)}
             except Exception as e:
-                print(f"PubMed search error: {str(e)}")
-                return {"pmids": [], "error": f"PubMed search error: {str(e)}"}
+                return {"pmids": [], "count": 0, "query": query, "error": str(e)}
 
 class PubMedFetch(MedicalTool):
     """Fetch and analyze medical information from PubMed articles."""
     name: str = "PubMedFetch"
     description: str = "Fetch and analyze medical information from PubMed articles."
 
-    def _run(self, pmids: list = None, **kwargs) -> Dict[str, Any]:
+    def _run(self, pmids: list = None, **kwargs) -> str:
         if pmids is None:
             pmids = kwargs.get("pmids", [])
         if isinstance(pmids, str):
             pmids = [p.strip() for p in pmids.split(",") if p.strip()]
         if not pmids:
-            print("[DEBUG] PubMedFetch._run: No PMIDs provided.")
-            return {"abstracts": []}
+            return "No PMIDs provided to fetch."
+        cache_key = f"PubMedFetch:{','.join(sorted(pmids))}"
+        return get_cached(cache_key, lambda: self._fetch(pmids), ttl=86400)
+
+    def _fetch(self, pmids: list) -> str:
         try:
             params = {
                 "db": "pubmed",
                 "id": ",".join(pmids),
                 "retmode": "xml",
                 "tool": "med_agent",
-                "email": "enter your email here"
+                "email": NCBI_EMAIL,
             }
-            if 'NCBI_API_KEY' in globals() and NCBI_API_KEY:
+            if NCBI_API_KEY:
                 params["api_key"] = NCBI_API_KEY
-            resp = requests.get(EFETCH_URL, params=params, timeout=10)
+            resp = http_session.get(EFETCH_URL, params=params, timeout=10)
             resp.raise_for_status()
             root = ET.fromstring(resp.text)
             articles = []
@@ -115,15 +116,11 @@ class PubMedFetch(MedicalTool):
                 formatted_article = self._format_article(article)
                 articles.append(formatted_article)
             if not articles:
-                return {"abstracts": [], "error": "No articles found"}
-            formatted_texts = [self._format_for_display(article) for article in articles]
-            separator = "\n\n" + "="*50 + "\n\n"
-            return {
-                "abstracts": formatted_texts,
-                "article_count": len(articles)
-            }
+                return "No articles found for the provided PMIDs."
+            separator = "\n\n" + "=" * 50 + "\n\n"
+            return separator.join(self._format_for_display(a) for a in articles)
         except Exception as e:
-            return {"abstracts": [], "error": f"Abstract fetch error: {str(e)}"}
+            return f"Abstract fetch error: {str(e)}"
     
     def _format_article(self, article: ET.Element) -> Dict[str, Any]:
         """Format a PubMed article into a structured dictionary.
@@ -197,54 +194,19 @@ class PubMedFetch(MedicalTool):
         return result
 
     def _format_for_display(self, article: Dict[str, Any]) -> str:
-        """Format an article dictionary into a readable, evidence-based summary string."""
-        sections = []
-        # Basic information
-        sections.append(f"PMID: {article['pmid']}")
-        sections.append(f"Title: {article['title']}")
-        sections.append(f"Journal: {article['journal']}")
-        if article['authors']:
-            sections.append(f"Authors: {'; '.join(article['authors'][:3])}")
-            if len(article['authors']) > 3:
-                sections.append(f"    and {len(article['authors']) - 3} more")
-        date_parts = []
-        for part in ['year', 'month', 'day']:
-            if part in article['date']:
-                date_parts.append(article['date'][part])
-        if date_parts:
-            sections.append(f"Date: {' '.join(date_parts)}")
-        if article['doi']:
-            sections.append(f"DOI: {article['doi']}")
-        if article['publication_types']:
-            sections.append(f"Publication Type: {', '.join(article['publication_types'])}")
-        if article['mesh_terms']:
-            sections.append("MeSH Terms:")
-            sections.append("    " + "; ".join(article['mesh_terms']))
-        sections.append("\nAbstract:")
-        for label, text in article['abstract_sections'].items():
-            if label != "text":
-                sections.append(f"\n{label.title()}:")
-            sections.append(text)
-        # Clinical summary and plain-language summary
-        clinical_summary = []
-        if 'conclusion' in article['abstract_sections']:
-            clinical_summary.append(f"Key Conclusion: {article['abstract_sections']['conclusion']}")
-        elif 'results' in article['abstract_sections']:
-            clinical_summary.append(f"Key Results: {article['abstract_sections']['results']}")
-        elif 'text' in article['abstract_sections']:
-            clinical_summary.append(f"Summary: {article['abstract_sections']['text'][:300]}{'...' if len(article['abstract_sections']['text']) > 300 else ''}")
-        if clinical_summary:
-            sections.append("\nClinical Summary:")
-            for line in clinical_summary:
-                sections.append(f"- {line}")
-        # Plain-language summary
-        plain = f"This article (PMID: {article['pmid']}) discusses {article['title']}. "
-        if 'conclusion' in article['abstract_sections']:
-            plain += f"Main conclusion: {article['abstract_sections']['conclusion'][:200]}{'...' if len(article['abstract_sections']['conclusion']) > 200 else ''} "
-        elif 'results' in article['abstract_sections']:
-            plain += f"Key results: {article['abstract_sections']['results'][:200]}{'...' if len(article['abstract_sections']['results']) > 200 else ''} "
-        elif 'text' in article['abstract_sections']:
-            plain += f"Summary: {article['abstract_sections']['text'][:200]}{'...' if len(article['abstract_sections']['text']) > 200 else ''} "
-        plain += "Consult a healthcare professional for interpretation and application to your care."
-        sections.append(f"\nPlain-language summary:\n{plain}")
-        return "\n".join(sections)
+        """Concise format — keeps token usage low for the LLM context."""
+        year = article['date'].get('year', '')
+        pub_type = article['publication_types'][0] if article['publication_types'] else ''
+        header = f"[PMID:{article['pmid']}] {article['title']} ({pub_type}, {year})"
+
+        # Pick the most informative abstract section (≤400 chars)
+        sections = article['abstract_sections']
+        text = (
+            sections.get('conclusion')
+            or sections.get('results')
+            or sections.get('text')
+            or next(iter(sections.values()), '')
+        )
+        text = text[:400] + ('...' if len(text) > 400 else '')
+
+        return f"{header}\nAbstract: {text}"

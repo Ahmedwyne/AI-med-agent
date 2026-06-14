@@ -3,8 +3,13 @@ name = "medical-agent-mcp"
 version = "1.0.0"
 description = "Medical agent MCP server for PubMed search, drug information lookup, and medical Q&A"
 readme = "README.md"
-requires-python = ">=3.10, <3.13"
-dependencies = [ "mcp>=1.9.0",]
+requires-python = ">=3.10, <3.14"
+dependencies = [
+    "mcp>=1.9.0",
+    "httpx>=0.27.0",
+    "beautifulsoup4>=4.12.0",
+    "python-dotenv>=1.0.0",
+]
 [[project.authors]]
 name = "Muhammad Ahmed"
 email = "140757400+Ahmedwyne@users.noreply.github.com"

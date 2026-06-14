@@ -1,46 +1,48 @@
 import os
 from dotenv import load_dotenv, find_dotenv
 
-# Load environment variables from .env
-dotenv_path = find_dotenv()
-if not dotenv_path:
-    raise FileNotFoundError(".env file not found. Please create one in the project root.")
-load_dotenv(dotenv_path)
+# Load .env if present — not required in Docker (vars injected via env_file/environment)
+_here = os.path.dirname(os.path.abspath(__file__))
+_candidates = [
+    find_dotenv(usecwd=True),
+    os.path.join(_here, "..", ".env"),
+    os.path.join(_here, "..", "..", "..", ".env"),
+]
+dotenv_path = next((p for p in _candidates if p and os.path.isfile(p)), None)
+if dotenv_path:
+    load_dotenv(dotenv_path)
 
-# Groq LLM settings
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL   = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
-GROQ_MAX_RETRIES = int(os.getenv("GROQ_MAX_RETRIES", 5))  
-GROQ_RETRY_DELAY = float(os.getenv("GROQ_RETRY_DELAY", 10.0))  
-GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS"))  # reduced from 2048 to stay within stricter limits
-GROQ_RATE_LIMIT_TPM = int(os.getenv("GROQ_RATE_LIMIT_TPM", 12000))  # tokens per minute limit
+# ── LLM ──────────────────────────────────────────────────────────────────────
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+LLM_MODEL      = os.getenv("LLM_MODEL", "gemini/gemini-2.0-flash")
+LLM_MAX_TOKENS = int(os.getenv("LLM_MAX_TOKENS", 2048))
 
-# Embedding model for SentenceTransformer
-EMBED_MODEL  = os.getenv("EMBED_MODEL")
+# Legacy Groq settings (kept for fallback / reference)
+GROQ_API_KEY   = os.getenv("GROQ_API_KEY")
+GROQ_MODEL     = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+GROQ_MAX_TOKENS = int(os.getenv("GROQ_MAX_TOKENS", 1024))
 
-# all-MiniLM-L6-v2
+# ── Embedding model ───────────────────────────────────────────────────────────
+EMBED_MODEL = os.getenv("EMBED_MODEL", "all-MiniLM-L6-v2")
 
-# Vector store settings
-VECTOR_DIR   = os.getenv("VECTOR_INDEX_DIR", "med_agent/vector_store")
+# ── Vector store ──────────────────────────────────────────────────────────────
+VECTOR_DIR = os.getenv("VECTOR_INDEX_DIR", "med_agent/vector_store")
 
-# Drug API key (for RxNorm )
-DRUG_API_KEY = os.getenv("DRUG_API_KEY")
+# ── External APIs ─────────────────────────────────────────────────────────────
+DRUG_API_KEY  = os.getenv("DRUG_API_KEY")
+NCBI_API_KEY  = os.getenv("NCBI_API_KEY")
+NCBI_EMAIL    = os.getenv("NCBI_EMAIL", "")   # Required by NCBI ToS — set in .env
+PUBMED_RETMAX = int(os.getenv("PUBMED_RETMAX", 5))
 
-# PubMed settings
-PUBMED_RETMAX = int(os.getenv("PUBMED_RETMAX"))
-NCBI_API_KEY = os.getenv("NCBI_API_KEY")  # Get NCBI API key from environment
-
-# Validate required variables
-required_vars = {"GROQ_API_KEY": GROQ_API_KEY, "EMBED_MODEL": EMBED_MODEL}
-missing = [k for k, v in required_vars.items() if not v]
-if missing:
-    raise EnvironmentError(f"Missing required env vars: {', '.join(missing)}")
+# ── Validation ────────────────────────────────────────────────────────────────
+if not GEMINI_API_KEY and not GROQ_API_KEY:
+    raise EnvironmentError(
+        "No LLM API key found. Set GEMINI_API_KEY (recommended) or GROQ_API_KEY in .env"
+    )
 
 __all__ = [
-    "GROQ_API_KEY",
-    "GROQ_MODEL",
-    "EMBED_MODEL",
-    "VECTOR_DIR",
-    "DRUG_API_KEY",
-    "PUBMED_RETMAX",
+    "GEMINI_API_KEY", "LLM_MODEL", "LLM_MAX_TOKENS",
+    "GROQ_API_KEY", "GROQ_MODEL",
+    "EMBED_MODEL", "VECTOR_DIR",
+    "DRUG_API_KEY", "NCBI_API_KEY", "NCBI_EMAIL", "PUBMED_RETMAX",
 ]
