@@ -31,8 +31,7 @@ async def search_pubmed(query: str, max_results: int = 5) -> List[Dict[str, str]
     """Search PubMed for articles matching the query."""
     search_url = f"{PUBMED_API_BASE}/esearch.fcgi"
     summary_url = f"{PUBMED_API_BASE}/esummary.fcgi"
-    
-    # First, search for article IDs
+
     params = {
         "db": "pubmed",
         "term": query,
@@ -40,37 +39,41 @@ async def search_pubmed(query: str, max_results: int = 5) -> List[Dict[str, str]
         "retmode": "json",
         "sort": "relevance"
     }
-    
-    async with http_client.get(search_url, params=params) as response:
-        search_data = response.json()
-        pmids = search_data["esearchresult"]["idlist"]
-    
+
+    response = await http_client.get(search_url, params=params)
+    response.raise_for_status()
+    search_data = response.json()
+    pmids = search_data.get("esearchresult", {}).get("idlist", [])
+
     if not pmids:
         return []
-    
-    # Then, get summaries for those articles
+
     params = {
         "db": "pubmed",
         "id": ",".join(pmids),
         "retmode": "json"
     }
-    
-    async with http_client.get(summary_url, params=params) as response:
-        summary_data = response.json()
-        results = []
-        
-        for pmid in pmids:
-            article = summary_data["result"][pmid]
-            results.append({
-                "title": article["title"],
-                "authors": ", ".join(author["name"] for author in article.get("authors", [])),
-                "journal": article.get("fulljournalname", ""),
-                "year": article.get("pubdate", "").split()[0],
-                "abstract": article.get("abstract", "No abstract available"),
-                "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
-            })
-            
-        return results
+
+    response = await http_client.get(summary_url, params=params)
+    response.raise_for_status()
+    summary_data = response.json()
+    result_map = summary_data.get("result", {})
+    results = []
+
+    for pmid in pmids:
+        article = result_map.get(pmid)
+        if not article or not isinstance(article, dict):
+            continue
+        results.append({
+            "title": article.get("title", ""),
+            "authors": ", ".join(author["name"] for author in article.get("authors", [])),
+            "journal": article.get("fulljournalname", ""),
+            "year": article.get("pubdate", "").split()[0] if article.get("pubdate") else "",
+            "abstract": article.get("abstract", "No abstract available"),
+            "url": f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
+        })
+
+    return results
 
 async def lookup_drug(name: str) -> Dict[str, str]:
     """Mock function for drug information lookup (replace with actual API when available)"""
@@ -85,35 +88,52 @@ async def lookup_drug(name: str) -> Dict[str, str]:
     return drug_info
 
 async def search_clinicaltrials(query: str, max_results: int = 5) -> List[Dict[str, str]]:
-    """Search ClinicalTrials.gov for studies matching the query."""
-    # This is a simplified example using the ClinicalTrials.gov v1 API
-    # For production, use the latest API and handle pagination, errors, etc.
-    search_url = f"https://clinicaltrials.gov/api/query/study_fields"
+    """Search ClinicalTrials.gov for studies matching the query (v2 API)."""
+    search_url = "https://clinicaltrials.gov/api/v2/studies"
     params = {
-        "expr": query,
+        "query.term": query,
+        "pageSize": max_results,
+        "format": "json",
         "fields": "NCTId,BriefTitle,Condition,InterventionName,LocationCity,LocationCountry,OverallStatus,StartDate,CompletionDate,BriefSummary",
-        "min_rnk": 1,
-        "max_rnk": max_results,
-        "fmt": "json"
     }
-    async with http_client.get(search_url, params=params) as response:
+    try:
+        response = await http_client.get(search_url, params=params)
+        response.raise_for_status()
         data = response.json()
-        studies = data.get("StudyFieldsResponse", {}).get("StudyFields", [])
+        studies = data.get("studies", [])
         results = []
         for study in studies:
+            proto = study.get("protocolSection", {})
+            id_mod = proto.get("identificationModule", {})
+            status_mod = proto.get("statusModule", {})
+            desc_mod = proto.get("descriptionModule", {})
+            arms_mod = proto.get("armsInterventionsModule", {})
+            contacts_mod = proto.get("contactsLocationsModule", {})
+
+            nct_id = id_mod.get("nctId", "")
+            conditions = proto.get("conditionsModule", {}).get("conditions", [])
+            interventions = [i.get("name", "") for i in arms_mod.get("interventions", [])]
+            locations = contacts_mod.get("locations", [])
+            location_str = ", ".join(
+                f"{loc.get('city', '')}, {loc.get('country', '')}" for loc in locations[:3]
+            )
+
             results.append({
-                "nct_id": study.get("NCTId", [""])[0],
-                "title": study.get("BriefTitle", [""])[0],
-                "condition": ", ".join(study.get("Condition", [])),
-                "intervention": ", ".join(study.get("InterventionName", [])),
-                "location": ", ".join(study.get("LocationCity", []) + study.get("LocationCountry", [])),
-                "status": study.get("OverallStatus", [""])[0],
-                "start_date": study.get("StartDate", [""])[0],
-                "completion_date": study.get("CompletionDate", [""])[0],
-                "summary": study.get("BriefSummary", [""])[0],
-                "url": f"https://clinicaltrials.gov/study/{study.get('NCTId', [''])[0]}"
+                "nct_id": nct_id,
+                "title": id_mod.get("briefTitle", ""),
+                "condition": ", ".join(conditions),
+                "intervention": ", ".join(interventions),
+                "location": location_str,
+                "status": status_mod.get("overallStatus", ""),
+                "start_date": status_mod.get("startDateStruct", {}).get("date", ""),
+                "completion_date": status_mod.get("completionDateStruct", {}).get("date", ""),
+                "summary": desc_mod.get("briefSummary", ""),
+                "url": f"https://clinicaltrials.gov/study/{nct_id}"
             })
         return results
+    except Exception as e:
+        print(f"ClinicalTrials search error: {e}")
+        return []
 
 # --- CDC Guidelines tool ---
 async def search_cdc_guidelines(query: str, max_results: int = 3) -> list[dict]:

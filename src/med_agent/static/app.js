@@ -1,53 +1,144 @@
-document.addEventListener('DOMContentLoaded', function() {
-  const form = document.getElementById('query-form');
-  const input = document.getElementById('user-query');
-  const conversation = document.getElementById('conversation');
+document.addEventListener('DOMContentLoaded', function () {
+  const form       = document.getElementById('query-form');
+  const textarea   = document.getElementById('user-query');
+  const chatArea   = document.getElementById('chat-area');
+  const sendBtn    = document.getElementById('send-btn');
+  const menuBtn    = document.getElementById('menu-btn');
+  const sidebar    = document.querySelector('.sidebar');
+  const toast      = document.getElementById('toast');
 
-  form.addEventListener('submit', async function(e) {
+  // ── Sidebar toggle ──
+  menuBtn.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+
+  // ── Example query buttons ──
+  document.querySelectorAll('.example-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      textarea.value = btn.dataset.query;
+      autoResize();
+      textarea.focus();
+      if (window.innerWidth <= 640) sidebar.classList.add('collapsed');
+    });
+  });
+
+  // ── Auto-resize textarea ──
+  function autoResize() {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 160) + 'px';
+  }
+  textarea.addEventListener('input', autoResize);
+
+  // ── Send on Enter, newline on Shift+Enter ──
+  textarea.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  // ── Submit ──
+  form.addEventListener('submit', async function (e) {
     e.preventDefault();
-    const userText = input.value.trim();
-    if (!userText) return;
-    renderMessage(userText, 'user-msg');
-    input.value = '';
+    const query = textarea.value.trim();
+    if (!query) return;
+
+    hideWelcome();
+    appendMessage(query, 'user');
+    textarea.value = '';
+    textarea.style.height = 'auto';
+
+    sendBtn.disabled = true;
+    const typingEl = appendTyping();
+
     try {
       const res = await fetch('/ask', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: userText })
+        body: JSON.stringify({ query })
       });
       const data = await res.json();
+      removeTyping(typingEl);
+
       if (data.result) {
-        renderMessage(data.result, 'agent-msg');
+        appendMessage(data.result, 'agent');
       } else if (data.error) {
-        emitAgentError('Error: ' + data.error);
-        renderMessage('Error: ' + data.error, 'error');
+        appendMessage(data.error, 'agent', true);
+        showToast('Agent returned an error', 'error');
       }
     } catch (err) {
-      emitAgentError('Network error: ' + err);
-      renderMessage('Network error: ' + err, 'error');
+      removeTyping(typingEl);
+      appendMessage('Network error — please check your connection.', 'agent', true);
+      showToast('Network error', 'error');
+    } finally {
+      sendBtn.disabled = false;
+      textarea.focus();
     }
   });
 
-  // To enable Markdown rendering, include marked.js in your HTML:
-  // <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  // The renderMessage function will use marked if available, otherwise fallback to innerHTML.
+  // ── Helpers ──
 
-  function renderMessage(text, cls) {
-    const div = document.createElement('div');
-    div.className = cls;
-    if (cls === 'agent-msg' && window.marked) {
-      // Render agent answers as Markdown (supports headings, lists, links, etc.)
-      div.innerHTML = window.marked.parse(text);
-    } else {
-      div.textContent = text;
-    }
-    conversation.appendChild(div);
-    conversation.scrollTop = conversation.scrollHeight;
+  function hideWelcome() {
+    const w = document.getElementById('welcome-state');
+    if (w) w.remove();
   }
 
-  // Emit custom error event for feedback UI
-  function emitAgentError(msg) {
-    const event = new CustomEvent('agent-error', { detail: msg });
-    window.dispatchEvent(event);
+  function appendMessage(text, role, isError = false) {
+    const row = document.createElement('div');
+    row.className = `msg-row ${role}`;
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = role === 'user' ? 'You' : 'AI';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'bubble' + (isError ? ' error' : '');
+
+    if (role === 'agent' && !isError && window.marked) {
+      marked.setOptions({ breaks: true, gfm: true });
+      bubble.innerHTML = marked.parse(text);
+      // Open links in new tab
+      bubble.querySelectorAll('a').forEach(a => a.setAttribute('target', '_blank'));
+    } else {
+      bubble.textContent = text;
+    }
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chatArea.appendChild(row);
+    scrollBottom();
+    return row;
+  }
+
+  function appendTyping() {
+    const row = document.createElement('div');
+    row.className = 'msg-row agent typing-row';
+
+    const avatar = document.createElement('div');
+    avatar.className = 'avatar';
+    avatar.textContent = 'AI';
+
+    const bubble = document.createElement('div');
+    bubble.className = 'typing-bubble';
+    bubble.innerHTML = '<span class="typing-dot"></span><span class="typing-dot"></span><span class="typing-dot"></span>';
+
+    row.appendChild(avatar);
+    row.appendChild(bubble);
+    chatArea.appendChild(row);
+    scrollBottom();
+    return row;
+  }
+
+  function removeTyping(el) {
+    if (el && el.parentNode) el.parentNode.removeChild(el);
+  }
+
+  function scrollBottom() {
+    chatArea.scrollTo({ top: chatArea.scrollHeight, behavior: 'smooth' });
+  }
+
+  function showToast(msg, type = '') {
+    toast.textContent = msg;
+    toast.className = 'toast show' + (type ? ' ' + type : '');
+    clearTimeout(toast._timer);
+    toast._timer = setTimeout(() => { toast.className = 'toast'; }, 3500);
   }
 });

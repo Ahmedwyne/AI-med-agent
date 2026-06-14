@@ -3,9 +3,20 @@ name = "med_agent"
 version = "0.1.0"
 description = "med-agent using crewAI"
 authors = [{ name = "Your Name", email = "you@example.com" }]
-requires-python = ">=3.10,<3.13"
+requires-python = ">=3.10,<3.14"
 dependencies = [
-    "crewai[tools]>=0.119.0,<1.0.0"
+    "crewai>=0.119.0,<1.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "httpx>=0.27.0",
+    "python-dotenv>=1.0.0",
+    "pydantic>=2.0.0",
+    "requests>=2.31.0",
+    "beautifulsoup4>=4.12.0",
+    "groq>=0.9.0",
+    "litellm>=1.40.0",
+    "jinja2>=3.1.0",
+    "python-multipart>=0.0.9",
 ]
 
 [project.scripts]
@@ -19,10 +30,23 @@ test = "med_agent.main:test"
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-mock>=3.12.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+    "ruff>=0.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
 [tool.crewai]
 type = "crew"
 
 [tool.uv.workspace]
 members = [
-    "src/med_agent/MCP server",
+    "src/med_agent/MCP_Server",
 ]
